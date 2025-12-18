@@ -1323,11 +1323,21 @@
 
         // Show/hide sections
         function showSection(sectionId) {
+            // Check if interactive onboarding is active
+            const onboardingElement = document.getElementById('interactive-onboarding');
+            if (onboardingElement && !onboardingElement.classList.contains('hidden')) {
+                // Block access to other sections during onboarding
+                alert('Please complete the onboarding process first to access other features.');
+                return;
+            }
+            
             document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
             
             document.getElementById(sectionId).classList.remove('hidden');
-            event.target.classList.add('active');
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
             
             // Load section data
             if (sectionId === 'dashboard') {
