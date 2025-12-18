@@ -327,6 +327,7 @@ class HTTPAPIClient:
             # Get author info from tweet
             author = tweet_data.get('author', {})
             author_id = author.get('id', '') if isinstance(author, dict) else None
+            author_username = author.get('userName', '') if isinstance(author, dict) else None
             
             # Parse created_at
             created_at = None
@@ -349,6 +350,7 @@ class HTTPAPIClient:
                 'text': tweet_text,
                 'created_at': created_at,
                 'author_id': str(author_id) if author_id else None,
+                'author_username': author_username,  # Add author username for URL generation
                 'public_metrics': type('Metrics', (), {
                     'like_count': like_count,
                     'reply_count': reply_count,

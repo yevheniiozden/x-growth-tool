@@ -211,6 +211,37 @@ def delete_post(post_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     return {"error": "Post not found"}
 
 
+def get_posts_ready_to_post(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Get posts that are scheduled and ready to post (scheduled time has passed)
+    
+    Args:
+        user_id: User ID
+    
+    Returns:
+        List of posts ready to post
+    """
+    schedule = load_content_schedule(user_id)
+    posts = schedule.get("posts", [])
+    
+    from datetime import datetime
+    now = datetime.now()
+    ready_posts = []
+    
+    for post in posts:
+        if post.get("status") == "approved" and post.get("scheduled_date") and post.get("scheduled_time"):
+            try:
+                scheduled_datetime_str = f"{post['scheduled_date']} {post['scheduled_time']}"
+                scheduled_datetime = datetime.strptime(scheduled_datetime_str, "%Y-%m-%d %H:%M")
+                
+                if scheduled_datetime <= now and not post.get("posted"):
+                    ready_posts.append(post)
+            except:
+                pass
+    
+    return ready_posts
+
+
 def approve_post(post_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     """Approve a post (mark as ready to post)"""
     result = update_post(post_id, {"status": "approved"}, user_id)

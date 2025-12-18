@@ -485,6 +485,49 @@ def save_onboarding_response(
     }
 
 
+def skip_onboarding_phase(user_id: str) -> Dict[str, Any]:
+    """
+    Skip current onboarding phase and move to next
+    
+    Args:
+        user_id: User ID
+    
+    Returns:
+        Result dict
+    """
+    users = load_users()
+    if user_id not in users:
+        return {"success": False, "error": "User not found"}
+    
+    user = users[user_id]
+    interactive = user.get("interactive_onboarding", {})
+    
+    if not interactive:
+        return {"success": False, "error": "No active onboarding"}
+    
+    phase = interactive.get("phase", 1)
+    
+    # Move to next phase
+    if phase < 4:
+        interactive["phase"] = phase + 1
+        # Reset index for new phase
+        interactive[f"phase{phase + 1}_index"] = 0
+    else:
+        # Complete onboarding
+        user["onboarding_complete"] = True
+        user["onboarding_step"] = "complete"
+        interactive["phase"] = 5
+    
+    user["interactive_onboarding"] = interactive
+    save_users(users)
+    
+    return {
+        "success": True,
+        "message": "Phase skipped",
+        "next_phase": interactive.get("phase")
+    }
+
+
 def complete_interactive_onboarding(user_id: str) -> Dict[str, Any]:
     """
     Mark interactive onboarding as complete

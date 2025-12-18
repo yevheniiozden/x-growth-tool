@@ -269,8 +269,36 @@ def get_posts_for_onboarding(
         if not tweets or not tweets.data:
             return []
         
+        # First, collect all author IDs to fetch usernames in bulk
+        author_ids_to_fetch = []
+        tweet_list = list(tweets.data)
+        for tweet in tweet_list:
+            author_id = tweet.author_id if hasattr(tweet, 'author_id') else (tweet.get('author_id') if isinstance(tweet, dict) else None)
+            if author_id and author_id not in author_ids_to_fetch:
+                author_ids_to_fetch.append(author_id)
+        
+        # Fetch usernames in bulk if we have author IDs
+        author_usernames = {}
+        if author_ids_to_fetch:
+            try:
+                users_response = client.get_users(ids=author_ids_to_fetch)
+                users_data = None
+                if hasattr(users_response, 'data'):
+                    users_data = users_response.data
+                elif isinstance(users_response, list):
+                    users_data = users_response
+                
+                if users_data:
+                    for user in users_data:
+                        user_id = user.id if hasattr(user, 'id') else (user.get('id') if isinstance(user, dict) else None)
+                        username = user.username if hasattr(user, 'username') else (user.get('username') if isinstance(user, dict) else None)
+                        if user_id and username:
+                            author_usernames[str(user_id)] = username
+            except Exception as e:
+                print(f"Error fetching author usernames: {e}")
+        
         # Score and filter posts
-        for tweet in tweets.data:
+        for tweet in tweet_list:
             text = tweet.text
             metrics = tweet.public_metrics
             
@@ -304,17 +332,26 @@ def get_posts_for_onboarding(
                 if total_engagement < 10:  # Minimum engagement threshold
                     continue
             
+            # Get post URL for embedding
+            tweet_id = tweet.id if hasattr(tweet, 'id') else (tweet.get('id') if isinstance(tweet, dict) else None)
+            author_username = getattr(tweet, 'author_username', 'unknown') or (tweet.get('author_username') if isinstance(tweet, dict) else 'unknown')
+            
+            post_url = None
+            if tweet_id and author_username:
+                post_url = f"https://twitter.com/{author_username}/status/{tweet_id}"
+            
             posts.append({
-                'id': tweet.id,
+                'id': tweet_id or str(tweet.id) if hasattr(tweet, 'id') else '',
                 'text': text,
-                'author_id': tweet.author_id,
-                'author_username': getattr(tweet, 'author_username', 'unknown'),
+                'author_id': tweet.author_id if hasattr(tweet, 'author_id') else (tweet.get('author_id') if isinstance(tweet, dict) else None),
+                'author_username': author_username,
                 'created_at': str(tweet.created_at) if hasattr(tweet, 'created_at') else None,
                 'likes': like_count,
                 'replies': reply_count,
                 'retweets': retweet_count,
                 'relevance_score': relevance_score,
-                'type': post_type
+                'type': post_type,
+                'url': post_url
             })
         
         # Sort by relevance and engagement

@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import requests
 
 # Import features
 from features.content_intelligence import analyze_list_content, analyze_multiple_lists
@@ -388,6 +389,43 @@ async def mark_reply_used_endpoint(post_id: str, reply_content: Optional[str] = 
         if not reply_content:
             raise HTTPException(status_code=400, detail="reply_content parameter required")
         return mark_reply_used(post_id, reply_content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/reply-guy/post/{post_id}")
+async def post_reply_endpoint(request: Request, post_id: str):
+    """Post a reply to X (with explicit approval)"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        data = await request.json()
+        reply_content = data.get("reply_content")
+        original_post_id = data.get("original_post_id")
+        
+        if not reply_content:
+            raise HTTPException(status_code=400, detail="reply_content required")
+        
+        from services.x_api import create_tweet
+        
+        # Post reply to X
+        result = create_tweet(reply_content, reply_to_tweet_id=original_post_id)
+        
+        if result.get("success"):
+            # Mark reply as used and posted
+            mark_reply_used(post_id, reply_content)
+            
+            return {
+                "success": True,
+                "message": "Reply posted to X",
+                "tweet_id": result.get("tweet_id")
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error", "Failed to post reply"))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

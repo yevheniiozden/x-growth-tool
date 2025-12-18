@@ -1084,49 +1084,74 @@
                     <div id="step1-error" style="margin-top: 1rem;"></div>
                 `;
             } else if (step === 2 || step === '2') {
-                // Step 2: Keywords
+                // Step 2: Keywords with tag-based input
                 content.innerHTML = `
                     <h2>🔑 Step 2: Identify Your Interests</h2>
                     <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
                         Help us understand what topics and keywords interest you. We'll use these to find 
                         relevant accounts, posts, and content that match your preferences.
                     </p>
-                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 1.5rem;">
-                        <strong>Please provide at least 3 keywords</strong> for better results. Examples: 
-                        "AI", "startups", "productivity", "design", "marketing"
-                    </p>
                     <div class="form-group">
-                        <label class="form-label">Keywords (comma-separated or one per line)</label>
-                        <textarea id="keywords-input" class="form-input" rows="5" 
-                                  placeholder="AI&#10;startups&#10;productivity"></textarea>
+                        <label class="form-label">Add Keywords</label>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                            <input type="text" id="keyword-input" class="form-input" 
+                                   placeholder="Type a keyword and press Enter" 
+                                   style="flex: 1;"
+                                   onkeypress="if(event.key === 'Enter') addKeyword()">
+                            <button class="btn btn-secondary" onclick="addKeyword()" style="white-space: nowrap;">
+                                Add Keyword
+                            </button>
+                        </div>
+                        <div id="keywords-container" class="keywords-tags-container" style="min-height: 60px; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="color: var(--text-muted); font-size: 13px; margin-bottom: 0.5rem;">
+                                <span id="keyword-count">0 keywords</span> (minimum 3 required)
+                            </div>
+                            <div id="keywords-tags" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+                        </div>
+                        <p style="color: var(--text-muted); font-size: 12px; margin-top: 0.5rem;">
+                            Examples: AI, startups, productivity, design, marketing
+                        </p>
                     </div>
-                    <button class="btn btn-primary" onclick="saveKeywords()" style="width: 100%;" id="keywords-btn">
-                        Continue
+                    <button class="btn btn-primary" onclick="saveKeywords()" style="width: 100%;" id="keywords-btn" disabled>
+                        Continue (need at least 3 keywords)
                     </button>
                     <div id="step2-error" style="margin-top: 1rem;"></div>
                 `;
+                
+                // Initialize keywords array
+                window.currentKeywords = [];
             } else if (step === 3 || step === '3') {
-                // Step 3: Relevance Sliders
+                // Step 3: Relevance Sliders with grid layout
                 const keywords = onboardingData?.keywords || [];
                 let slidersHTML = keywords.map((keyword, idx) => `
-                    <div style="margin-bottom: 1.5rem;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <label style="color: var(--text-secondary); font-weight: 500;">${keyword}</label>
-                            <span id="slider-value-${idx}" style="color: var(--primary); font-weight: 600;">50%</span>
+                    <div class="slider-item">
+                        <div class="slider-header">
+                            <span class="slider-label">${escapeHtml(keyword)}</span>
+                            <span class="slider-value" id="slider-value-${idx}">50%</span>
                         </div>
-                        <input type="range" id="slider-${idx}" min="10" max="100" value="50" 
-                               oninput="updateSliderValue(${idx}, this.value)"
-                               style="width: 100%; height: 8px; border-radius: 4px; background: var(--bg-tertiary);">
+                        <input type="range" class="slider-input" id="slider-${idx}" min="10" max="100" value="50" 
+                               oninput="updateSliderValue(${idx}, this.value)">
+                        <div class="slider-actions">
+                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 25)">Low</button>
+                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 50)">Medium</button>
+                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 75)">High</button>
+                        </div>
                     </div>
                 `).join('');
                 
                 content.innerHTML = `
                     <h2>🎚️ Step 3: Set Relevance Levels</h2>
-                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
                         Adjust the relevance level for each keyword. This helps us prioritize content 
                         and accounts that match your interests.
                     </p>
-                    <div id="sliders-container">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <span style="color: var(--text-muted); font-size: 14px;">${keywords.length} keywords</span>
+                        <button class="slider-quick-action" onclick="setAllSliders(50)" style="padding: 0.5rem 1rem;">
+                            Set All to 50%
+                        </button>
+                    </div>
+                    <div class="sliders-grid" id="sliders-container">
                         ${slidersHTML}
                     </div>
                     <button class="btn btn-primary" onclick="saveRelevance()" style="width: 100%;" id="relevance-btn">
@@ -1172,20 +1197,63 @@
             document.getElementById(`slider-value-${idx}`).textContent = value + '%';
         }
         
-        async function saveKeywords() {
-            const input = document.getElementById('keywords-input').value.trim();
-            const errorDiv = document.getElementById('step2-error');
-            const btn = document.getElementById('keywords-btn');
+        // Keywords management
+        function addKeyword() {
+            const input = document.getElementById('keyword-input');
+            const keyword = input.value.trim();
             
-            if (!input) {
-                errorDiv.innerHTML = '<div class="alert alert-error">Please enter at least 3 keywords</div>';
+            if (!keyword) return;
+            
+            // Check if keyword already exists
+            if (window.currentKeywords.includes(keyword.toLowerCase())) {
+                input.value = '';
                 return;
             }
             
-            // Parse keywords (comma or newline separated)
-            const keywords = input.split(/[,\n]/)
-                .map(k => k.trim())
-                .filter(k => k.length > 0);
+            // Add keyword
+            window.currentKeywords.push(keyword);
+            input.value = '';
+            updateKeywordsDisplay();
+        }
+        
+        function removeKeyword(keyword) {
+            window.currentKeywords = window.currentKeywords.filter(k => k !== keyword);
+            updateKeywordsDisplay();
+        }
+        
+        function updateKeywordsDisplay() {
+            const container = document.getElementById('keywords-tags');
+            const countSpan = document.getElementById('keyword-count');
+            const btn = document.getElementById('keywords-btn');
+            
+            if (!container) return;
+            
+            container.innerHTML = window.currentKeywords.map(keyword => `
+                <div class="keyword-tag">
+                    <span>${escapeHtml(keyword)}</span>
+                    <button class="remove-btn" onclick="removeKeyword('${keyword.replace(/'/g, "\\'")}')" title="Remove">×</button>
+                </div>
+            `).join('');
+            
+            const count = window.currentKeywords.length;
+            if (countSpan) {
+                countSpan.textContent = `${count} keyword${count !== 1 ? 's' : ''}`;
+                countSpan.style.color = count >= 3 ? 'var(--success)' : 'var(--text-muted)';
+            }
+            
+            if (btn) {
+                btn.disabled = count < 3;
+                btn.textContent = count < 3 
+                    ? `Continue (need ${3 - count} more keyword${3 - count !== 1 ? 's' : ''})`
+                    : 'Continue';
+            }
+        }
+        
+        async function saveKeywords() {
+            const errorDiv = document.getElementById('step2-error');
+            const btn = document.getElementById('keywords-btn');
+            
+            const keywords = window.currentKeywords || [];
             
             if (keywords.length < 3) {
                 errorDiv.innerHTML = '<div class="alert alert-error">Please provide at least 3 keywords</div>';
@@ -1415,6 +1483,9 @@
             const content = document.getElementById('dashboard-content');
             content.innerHTML = '<div class="spinner"></div>';
             
+            // Check for posts ready to post
+            checkReadyPosts();
+            
             try {
                 const [targetsRes, progressRes, actionsRes] = await Promise.all([
                     fetch('/api/daily-actions/targets', { headers: getAuthHeaders() }),
@@ -1643,11 +1714,50 @@
             }
         }
 
-        // Mark reply as used
+        // Edit reply
+        async function editReply(postId, currentContent) {
+            const newContent = prompt('Edit reply:', currentContent);
+            if (!newContent || newContent === currentContent) return;
+            
+            // Update the reply suggestion in UI (would need to reload or update DOM)
+            loadPendingReplies();
+        }
+        
+        // Post reply to X
+        async function postReply(postId, replyContent, originalPostId) {
+            if (!confirm('Post this reply to X? This will publish it publicly.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/reply-guy/post/${postId}`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        reply_content: replyContent,
+                        original_post_id: originalPostId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Reply posted successfully to X!');
+                    loadPendingReplies();
+                } else {
+                    alert('Error posting reply: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        // Mark reply as used (without posting)
         async function markReplyUsed(postId, replyContent) {
             try {
                 await fetch(`/api/reply-guy/mark-used/${postId}?reply_content=${encodeURIComponent(replyContent)}`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: getAuthHeaders()
                 });
                 loadPendingReplies();
             } catch (error) {
@@ -1864,10 +1974,117 @@
             return num.toString();
         }
         
+        function renderCustomPost(container, post) {
+            const author = post.author || {};
+            const profileImage = author.profile_image_url || post.author_profile_image || '';
+            const authorName = author.name || post.author_name || post.author_username || 'Unknown';
+            const authorUsername = author.username || post.author_username || 'unknown';
+            const verified = author.verified || post.author_verified || false;
+            
+            container.innerHTML = `
+                <div class="x-post-card">
+                    <img class="x-avatar" src="${profileImage || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23334155\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%2394a3b8\' font-size=\'20\'%3E@%3C/text%3E%3C/svg%3E'}" alt="${authorName}">
+                    <div class="x-post-content">
+                        <div class="x-post-header">
+                            <span class="x-username">${authorName}</span>
+                            ${verified ? '<span class="verified-badge" style="display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: var(--primary); border-radius: 50%; color: white; font-size: 10px;">✓</span>' : ''}
+                            <span class="x-handle">@${authorUsername}</span>
+                        </div>
+                        <div class="x-post-text">${escapeHtml(post.text || '')}</div>
+                        ${post.url ? `<div style="margin-top: 0.5rem;"><a href="${post.url}" target="_blank" style="color: var(--primary); text-decoration: none; font-size: 13px;">View on X →</a></div>` : ''}
+                        <div class="x-post-engagement">
+                            <span class="x-engagement-item">
+                                <span>❤️</span>
+                                <span>${formatNumber(post.likes || 0)}</span>
+                            </span>
+                            <span class="x-engagement-item">
+                                <span>💬</span>
+                                <span>${formatNumber(post.replies || 0)}</span>
+                            </span>
+                            ${post.retweets ? `
+                            <span class="x-engagement-item">
+                                <span>🔄</span>
+                                <span>${formatNumber(post.retweets)}</span>
+                            </span>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
         // Interactive Onboarding Functions
         let currentOnboardingPhase = 1;
         let currentOnboardingPost = null;
         let currentOnboardingProfile = null;
+        
+        async function skipOnboardingPhase() {
+            if (!confirm('Are you sure you want to skip this phase? You can always complete it later.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/onboarding/interactive/skip-phase', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    // Reload onboarding status
+                    const statusResponse = await fetch('/api/onboarding/interactive/status', {
+                        headers: getAuthHeaders()
+                    });
+                    const status = await statusResponse.json();
+                    
+                    if (status.active) {
+                        await showInteractiveOnboarding(status);
+                    } else {
+                        // Onboarding complete, go to dashboard
+                        document.getElementById('interactive-onboarding').classList.add('hidden');
+                        document.getElementById('dashboard-content').classList.remove('hidden');
+                        loadDashboard();
+                    }
+                } else {
+                    alert('Error skipping phase: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function skipAllOnboarding() {
+            if (!confirm('Are you sure you want to skip all onboarding? You can complete it later from settings.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/onboarding/skip-all', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    // Go to dashboard
+                    document.getElementById('interactive-onboarding').classList.add('hidden');
+                    document.getElementById('onboarding-modal').classList.add('hidden');
+                    document.getElementById('dashboard-content').classList.remove('hidden');
+                    
+                    // Unblock other sections
+                    document.querySelectorAll('.nav-btn').forEach(btn => {
+                        btn.style.pointerEvents = 'auto';
+                        btn.style.opacity = '1';
+                    });
+                    
+                    loadDashboard();
+                } else {
+                    alert('Error skipping onboarding: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
         
         async function showInteractiveOnboarding(status) {
             // Hide dashboard content and show onboarding
@@ -1936,42 +2153,39 @@
                     if (phaseElement && postContentElement) {
                         phaseElement.classList.remove('hidden');
                         
-                        // Display post in X-like format
-                        const author = data.post.author || {};
-                        const profileImage = author.profile_image_url || data.post.author_profile_image || '';
-                        const authorName = author.name || data.post.author_name || data.post.author_username || 'Unknown';
-                        const authorUsername = author.username || data.post.author_username || 'unknown';
-                        const verified = author.verified || data.post.author_verified || false;
-                        
-                        postContentElement.innerHTML = `
-                            <div class="x-post-card">
-                                <img class="x-avatar" src="${profileImage || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23334155\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%2394a3b8\' font-size=\'20\'%3E@%3C/text%3E%3C/svg%3E'}" alt="${authorName}">
-                                <div class="x-post-content">
-                                    <div class="x-post-header">
-                                        <span class="x-username">${authorName}</span>
-                                        ${verified ? '<span class="verified-badge" style="display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: var(--primary); border-radius: 50%; color: white; font-size: 10px;">✓</span>' : ''}
-                                        <span class="x-handle">@${authorUsername}</span>
-                                    </div>
-                                    <div class="x-post-text">${escapeHtml(data.post.text || '')}</div>
-                                    <div class="x-post-engagement">
-                                        <span class="x-engagement-item">
-                                            <span>❤️</span>
-                                            <span>${formatNumber(data.post.likes || 0)}</span>
-                                        </span>
-                                        <span class="x-engagement-item">
-                                            <span>💬</span>
-                                            <span>${formatNumber(data.post.replies || 0)}</span>
-                                        </span>
-                                        ${data.post.retweets ? `
-                                        <span class="x-engagement-item">
-                                            <span>🔄</span>
-                                            <span>${formatNumber(data.post.retweets)}</span>
-                                        </span>
-                                        ` : ''}
-                                    </div>
-                                </div>
-                            </div>
-                        `;
+                        // Try to embed post using oEmbed if URL is available
+                        if (data.post.url) {
+                            // Fetch oEmbed HTML
+                            fetch(`/api/onboarding/oembed?url=${encodeURIComponent(data.post.url)}`, {
+                                headers: getAuthHeaders()
+                            })
+                            .then(response => response.json())
+                            .then(oembedData => {
+                                if (oembedData.success && oembedData.html) {
+                                    // Use embedded post
+                                    postContentElement.innerHTML = `
+                                        <div style="display: flex; justify-content: center; margin: 1rem 0;">
+                                            ${oembedData.html}
+                                        </div>
+                                        <div style="text-align: center; margin-top: 1rem;">
+                                            <a href="${data.post.url}" target="_blank" style="color: var(--primary); text-decoration: none; font-size: 14px;">
+                                                View on X →
+                                            </a>
+                                        </div>
+                                    `;
+                                } else {
+                                    // Fallback to custom design
+                                    renderCustomPost(postContentElement, data.post);
+                                }
+                            })
+                            .catch(error => {
+                                console.error('oEmbed error:', error);
+                                renderCustomPost(postContentElement, data.post);
+                            });
+                        } else {
+                            // No URL available, use custom design
+                            renderCustomPost(postContentElement, data.post);
+                        }
                     }
                 } else {
                     alert('Error loading post: ' + (data.error || 'Unknown error'));
