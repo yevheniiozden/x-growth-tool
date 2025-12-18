@@ -1178,12 +1178,14 @@
                             Reset All to 50%
                         </button>
                     </div>
-                    <div class="sliders-grid" id="sliders-container">
+                    <div class="sliders-grid" id="sliders-container" style="max-height: 60vh; overflow-y: auto; padding-right: 0.5rem;">
                         ${slidersHTML}
                     </div>
-                    <button class="btn btn-primary" onclick="saveRelevance()" style="width: 100%; margin-top: 1.5rem; padding: 1rem; font-size: 16px; font-weight: 600;" id="relevance-btn">
-                        Continue to Training
-                    </button>
+                    <div style="position: sticky; bottom: 0; background: var(--bg-primary); padding: 1.5rem 0; margin-top: 1.5rem; border-top: 2px solid var(--border);">
+                        <button class="btn btn-primary" onclick="saveRelevance()" style="width: 100%; padding: 1rem; font-size: 16px; font-weight: 600;" id="relevance-btn">
+                            Continue to Training
+                        </button>
+                    </div>
                     <div id="step3-error" style="margin-top: 1rem;"></div>
                 `;
             } else if (step === 4 || step === '4') {
@@ -2330,17 +2332,25 @@
                                         </div>
                                     `;
                                     
-                                    // Load Twitter widgets script if not already loaded
+                                    // Function to load Twitter widgets
                                     const loadTwitterWidgets = () => {
                                         if (window.twttr && window.twttr.widgets) {
-                                            window.twttr.widgets.load(postContentElement);
+                                            // Find the blockquote in the container
+                                            const blockquote = postContentElement.querySelector('blockquote.twitter-tweet');
+                                            if (blockquote) {
+                                                window.twttr.widgets.load(blockquote);
+                                            } else {
+                                                // If no blockquote found, load the entire container
+                                                window.twttr.widgets.load(postContentElement);
+                                            }
                                         } else {
                                             // Wait a bit and try again
-                                            setTimeout(loadTwitterWidgets, 100);
+                                            setTimeout(loadTwitterWidgets, 200);
                                         }
                                     };
                                     
-                                    if (!window.twttr) {
+                                    // Ensure Twitter widgets script is loaded
+                                    if (!document.getElementById('twitter-wjs')) {
                                         const script = document.createElement('script');
                                         script.src = 'https://platform.twitter.com/widgets.js';
                                         script.charset = 'utf-8';
@@ -2350,11 +2360,19 @@
                                         
                                         // Wait for script to load, then initialize
                                         script.onload = function() {
-                                            setTimeout(loadTwitterWidgets, 500);
+                                            setTimeout(loadTwitterWidgets, 1000);
+                                        };
+                                        script.onerror = function() {
+                                            console.error('Failed to load Twitter widgets');
+                                            renderCustomPost(postContentElement, data.post);
                                         };
                                     } else {
-                                        // Re-initialize widgets immediately
-                                        loadTwitterWidgets();
+                                        // Script already loaded, initialize immediately
+                                        if (window.twttr && window.twttr.ready) {
+                                            window.twttr.ready(loadTwitterWidgets);
+                                        } else {
+                                            setTimeout(loadTwitterWidgets, 500);
+                                        }
                                     }
                                 } else {
                                     // Fallback to custom design
