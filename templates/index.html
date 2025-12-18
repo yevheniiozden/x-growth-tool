@@ -2570,6 +2570,28 @@
             }
         }
         
+        // Progressive enhancement: check for AI-enhanced results
+        let aiEnhancementCheckInterval = null;
+        
+        async function checkForAIEnhancement(phase) {
+            try {
+                const response = await fetch(`/api/onboarding/cache-status?phase=${phase}`, {
+                    headers: getAuthHeaders()
+                });
+                const status = await response.json();
+                
+                if (status.ready && status.ai_enhanced && !status.preparing) {
+                    // AI-enhanced results are ready - refresh the post
+                    console.log('AI-enhanced results available, refreshing...');
+                    clearInterval(aiEnhancementCheckInterval);
+                    aiEnhancementCheckInterval = null;
+                    await loadOnboardingPost(phase);
+                }
+            } catch (error) {
+                console.error('Error checking AI enhancement status:', error);
+            }
+        }
+        
         async function loadOnboardingPost(phase) {
             try {
                 const response = await fetch(`/api/onboarding/interactive/post?phase=${phase}`, {
@@ -2587,6 +2609,25 @@
                     
                     if (phaseElement && postContentElement) {
                         phaseElement.classList.remove('hidden');
+                        
+                        // Show AI enhancement indicator if available
+                        if (data.ai_enhanced) {
+                            // Add indicator that these are AI-enhanced results
+                            const indicator = document.createElement('div');
+                            indicator.style.cssText = 'text-align: center; padding: 0.5rem; background: rgba(99, 102, 241, 0.1); border: 1px solid var(--primary); border-radius: 8px; margin-bottom: 1rem; font-size: 13px; color: var(--primary);';
+                            indicator.innerHTML = '✨ Enhanced with AI';
+                            if (!postContentElement.querySelector('.ai-indicator')) {
+                                indicator.className = 'ai-indicator';
+                                postContentElement.insertBefore(indicator, postContentElement.firstChild);
+                            }
+                        }
+                        
+                        // Start progressive enhancement polling if not AI-enhanced yet
+                        if (!data.ai_enhanced && !aiEnhancementCheckInterval) {
+                            aiEnhancementCheckInterval = setInterval(() => {
+                                checkForAIEnhancement(phase);
+                            }, 5000); // Check every 5 seconds
+                        }
                         
                         // Check if this is a loading state
                         if (data.loading) {

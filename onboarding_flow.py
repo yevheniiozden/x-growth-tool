@@ -332,11 +332,12 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
                 "loading": True
             }
         
-        # Background task completed but no posts - try quick fetch with simpler queries
-        print(f"No cached posts found for phase {phase}, attempting quick fetch (fast mode)...")
+        # No cache found - try quick fetch for immediate results, then trigger AI in background
+        print(f"No cached posts found for phase {phase}, attempting quick fetch...")
         try:
-            # Use fast mode - skip AI expansion entirely for immediate results
+            # Use fast mode for immediate results (non-blocking)
             from features.account_discovery import get_posts_for_onboarding
+            from datetime import datetime
             
             if phase == 1:
                 posts = get_posts_for_onboarding(keywords, keyword_relevance, 'like', 20, fast_mode=True)
@@ -347,14 +348,65 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
             
             print(f"Quick fetch returned {len(posts)} posts for phase {phase}")
             
-            # Cache posts if we got any
-            if posts:
-                try:
-                    with open(cache_file, 'w', encoding='utf-8') as f:
-                        json.dump(posts, f, indent=2, ensure_ascii=False)
-                    print(f"Cached {len(posts)} posts to {cache_file}")
-                except Exception as e:
-                    print(f"Error caching posts to {cache_file}: {e}")
+            # Cache posts with metadata (fast mode, not AI-enhanced)
+            cache_data = {
+                "ai_enhanced": False,
+                "timestamp": datetime.now().isoformat(),
+                "preparing": False,
+                "posts": posts if posts else []
+            }
+            
+            try:
+                with open(cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(cache_data, f, indent=2, ensure_ascii=False)
+                print(f"Cached {len(posts)} posts (fast mode) to {cache_file}")
+            except Exception as e:
+                print(f"Error caching posts to {cache_file}: {e}")
+            
+            # Trigger AI enhancement in background (non-blocking)
+            # This will update cache with AI-enhanced results when ready
+            try:
+                from threading import Thread
+                def enhance_with_ai():
+                    try:
+                        print(f"Starting AI enhancement for phase {phase} in background...")
+                        # Mark cache as preparing
+                        cache_data["preparing"] = True
+                        with open(cache_file, 'w', encoding='utf-8') as f:
+                            json.dump(cache_data, f, indent=2, ensure_ascii=False)
+                        
+                        # Get AI-enhanced posts
+                        if phase == 1:
+                            ai_posts = get_posts_for_onboarding(keywords, keyword_relevance, 'like', 20, fast_mode=False)
+                        elif phase == 2:
+                            ai_posts = get_posts_for_onboarding(keywords, keyword_relevance, 'reply', 10, fast_mode=False)
+                        elif phase == 3:
+                            ai_posts = get_posts_for_onboarding(keywords, keyword_relevance, 'engage', 20, fast_mode=False)
+                        
+                        # Update cache with AI-enhanced results
+                        cache_data["ai_enhanced"] = True
+                        cache_data["preparing"] = False
+                        cache_data["timestamp"] = datetime.now().isoformat()
+                        cache_data["posts"] = ai_posts if ai_posts else posts  # Fallback to fast mode posts if AI fails
+                        
+                        with open(cache_file, 'w', encoding='utf-8') as f:
+                            json.dump(cache_data, f, indent=2, ensure_ascii=False)
+                        print(f"AI enhancement completed for phase {phase}: {len(ai_posts)} posts")
+                    except Exception as e:
+                        print(f"Error in AI enhancement for phase {phase}: {e}")
+                        # Mark as not preparing if enhancement fails
+                        cache_data["preparing"] = False
+                        try:
+                            with open(cache_file, 'w', encoding='utf-8') as f:
+                                json.dump(cache_data, f, indent=2, ensure_ascii=False)
+                        except:
+                            pass
+                
+                # Start AI enhancement in background thread
+                Thread(target=enhance_with_ai, daemon=True).start()
+            except Exception as e:
+                print(f"Error starting AI enhancement thread: {e}")
+                
         except Exception as e:
             print(f"Error fetching posts for phase {phase}: {e}")
             import traceback
@@ -366,6 +418,9 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
     if len(posts_with_urls) < len(posts):
         print(f"Filtered out {len(posts) - len(posts_with_urls)} posts without URLs (phase {phase})")
     posts = posts_with_urls
+    
+    # Store AI-enhanced flag for response
+    ai_enhanced_flag = ai_enhanced
     
     current_index = interactive.get(f"phase{phase}_index", 0)
     print(f"Current index for phase {phase}: {current_index}, Total posts: {len(posts)}")
@@ -410,7 +465,8 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
         "success": True,
         "post": post,
         "index": current_index,
-        "total": len(posts)
+        "total": len(posts),
+        "ai_enhanced": ai_enhanced_flag  # Indicate if these are AI-enhanced results
     }
 
 
@@ -710,24 +766,42 @@ def _prepare_onboarding_data(user_id: str) -> None:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump([], f, indent=2, ensure_ascii=False)
         
-        # Fetch and cache posts for each phase (handle API errors gracefully)
+        # Fetch and cache posts for each phase with full AI search (comprehensive, not fast_mode)
+        # This runs in background, so we can use full AI without blocking
+        from datetime import datetime
+        
         for phase, post_type, count in [(1, 'like', 20), (2, 'reply', 10), (3, 'engage', 20)]:
             try:
-                posts = get_posts_for_onboarding(keywords, keyword_relevance, post_type, count)
+                print(f"Preparing AI-enhanced posts for phase {phase} (comprehensive search)...")
+                # Use full AI search (fast_mode=False) for comprehensive results
+                posts = get_posts_for_onboarding(keywords, keyword_relevance, post_type, count, fast_mode=False)
                 cache_file = user_dir / f"onboarding_posts_phase{phase}.json"
-                if posts:
-                    with open(cache_file, 'w', encoding='utf-8') as f:
-                        json.dump(posts, f, indent=2, ensure_ascii=False)
-                else:
-                    # If no posts found (API error), create empty cache to allow onboarding to proceed
-                    with open(cache_file, 'w', encoding='utf-8') as f:
-                        json.dump([], f, indent=2, ensure_ascii=False)
+                
+                # Cache with metadata for smart cache checking
+                cache_data = {
+                    "ai_enhanced": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "preparing": False,
+                    "posts": posts if posts else []
+                }
+                
+                with open(cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(cache_data, f, indent=2, ensure_ascii=False)
+                print(f"Cached {len(posts)} AI-enhanced posts for phase {phase}")
             except Exception as e:
                 print(f"Error preparing posts for phase {phase}: {e}")
-                # Create empty cache to allow onboarding to proceed
+                import traceback
+                traceback.print_exc()
+                # Create empty cache with metadata to allow onboarding to proceed
                 cache_file = user_dir / f"onboarding_posts_phase{phase}.json"
+                cache_data = {
+                    "ai_enhanced": False,
+                    "timestamp": datetime.now().isoformat(),
+                    "preparing": False,
+                    "posts": []
+                }
                 with open(cache_file, 'w', encoding='utf-8') as f:
-                    json.dump([], f, indent=2, ensure_ascii=False)
+                    json.dump(cache_data, f, indent=2, ensure_ascii=False)
         
         # Mark data preparation as complete
         users = load_users()
@@ -741,6 +815,65 @@ def _prepare_onboarding_data(user_id: str) -> None:
         print(f"Error in background data preparation: {e}")
         import traceback
         traceback.print_exc()
+
+
+def get_cache_status(user_id: str, phase: int) -> Dict[str, Any]:
+    """
+    Get cache status for onboarding phase
+    
+    Args:
+        user_id: User ID
+        phase: Phase number (1, 2, or 3)
+    
+    Returns:
+        Cache status dict with ready, ai_enhanced, timestamp
+    """
+    user_dir = get_user_data_dir(user_id)
+    cache_file = user_dir / f"onboarding_posts_phase{phase}.json"
+    
+    if not cache_file.exists():
+        return {
+            "ready": False,
+            "ai_enhanced": False,
+            "preparing": False,
+            "timestamp": None
+        }
+    
+    try:
+        with open(cache_file, 'r', encoding='utf-8') as f:
+            cache_data = json.load(f)
+        
+        # Check if it's new format with metadata
+        if isinstance(cache_data, dict) and "posts" in cache_data:
+            posts = cache_data.get("posts", [])
+            is_preparing = cache_data.get("preparing", False)
+            timestamp_str = cache_data.get("timestamp", "")
+            
+            return {
+                "ready": len(posts) > 0 and not is_preparing,
+                "ai_enhanced": cache_data.get("ai_enhanced", False),
+                "preparing": is_preparing,
+                "timestamp": timestamp_str,
+                "post_count": len(posts)
+            }
+        else:
+            # Old format - assume ready but not AI-enhanced
+            posts = cache_data if isinstance(cache_data, list) else []
+            return {
+                "ready": len(posts) > 0,
+                "ai_enhanced": False,
+                "preparing": False,
+                "timestamp": None,
+                "post_count": len(posts)
+            }
+    except Exception as e:
+        print(f"Error reading cache status for phase {phase}: {e}")
+        return {
+            "ready": False,
+            "ai_enhanced": False,
+            "preparing": False,
+            "timestamp": None
+        }
 
 
 def _keyword_to_topic(keyword: str) -> Optional[str]:
