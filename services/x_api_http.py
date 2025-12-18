@@ -293,11 +293,15 @@ class HTTPAPIClient:
             print(f"Warning: search_recent_tweets received string response: {data[:100]}")
             return type('Response', (), {'data': None, 'meta': {}})()
         
-        # twitterapi.io response format
+        # twitterapi.io response format: {"tweets": [...], "has_next_page": bool, "next_cursor": str}
         if isinstance(data, dict):
-            tweets_data = data.get('data', data.get('tweets', []))
+            tweets_data = data.get('tweets', [])
+            next_cursor = data.get('next_cursor', '')
+            has_next_page = data.get('has_next_page', False)
         elif isinstance(data, list):
             tweets_data = data
+            next_cursor = ''
+            has_next_page = False
         else:
             print(f"Warning: search_recent_tweets received unexpected data type: {type(data)}")
             return type('Response', (), {'data': None, 'meta': {}})()
@@ -305,11 +309,14 @@ class HTTPAPIClient:
         # Convert to tweepy-compatible format
         tweets = []
         for tweet_data in tweets_data:
-            # Handle different response formats
-            tweet_id = tweet_data.get('id', tweet_data.get('tweetId', ''))
-            tweet_text = tweet_data.get('text', tweet_data.get('content', ''))
-            created_at_str = tweet_data.get('created_at', tweet_data.get('createdAt', ''))
-            author_id = tweet_data.get('author_id', tweet_data.get('userId', ''))
+            # Handle twitterapi.io response format
+            tweet_id = tweet_data.get('id', '')
+            tweet_text = tweet_data.get('text', '')
+            created_at_str = tweet_data.get('createdAt', '')  # camelCase in API response
+            
+            # Get author info from tweet
+            author = tweet_data.get('author', {})
+            author_id = author.get('id', '') if isinstance(author, dict) else None
             
             # Parse created_at
             created_at = None
@@ -322,10 +329,10 @@ class HTTPAPIClient:
                 except:
                     pass
             
-            # Get metrics
-            metrics_data = tweet_data.get('public_metrics', tweet_data.get('metrics', {}))
-            if not isinstance(metrics_data, dict):
-                metrics_data = {}
+            # Get metrics - twitterapi.io uses camelCase
+            like_count = tweet_data.get('likeCount', 0)
+            reply_count = tweet_data.get('replyCount', 0)
+            retweet_count = tweet_data.get('retweetCount', 0)
             
             tweet = type('Tweet', (), {
                 'id': str(tweet_id),
@@ -333,16 +340,21 @@ class HTTPAPIClient:
                 'created_at': created_at,
                 'author_id': str(author_id) if author_id else None,
                 'public_metrics': type('Metrics', (), {
-                    'like_count': metrics_data.get('like_count', metrics_data.get('likeCount', 0)),
-                    'reply_count': metrics_data.get('reply_count', metrics_data.get('replyCount', 0)),
-                    'retweet_count': metrics_data.get('retweet_count', metrics_data.get('retweetCount', 0))
+                    'like_count': like_count,
+                    'reply_count': reply_count,
+                    'retweet_count': retweet_count
                 })()
             })()
             tweets.append(tweet)
         
+        # Create meta object with pagination info
+        meta = {
+            'next_token': next_cursor if has_next_page else None
+        }
+        
         return type('Response', (), {
             'data': tweets,
-            'meta': data.get('meta', {})
+            'meta': meta
         })()
     
     def get_users(self, ids: List[str], user_fields: Optional[List[str]] = None) -> Any:
