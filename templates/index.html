@@ -2304,41 +2304,12 @@
             return num.toString();
         }
         
-        function renderCustomPost(container, post) {
-            const author = post.author || {};
-            const profileImage = author.profile_image_url || post.author_profile_image || '';
-            const authorName = author.name || post.author_name || post.author_username || 'Unknown';
-            const authorUsername = author.username || post.author_username || 'unknown';
-            const verified = author.verified || post.author_verified || false;
-            
+        function showEmbedError(container, errorMessage, postUrl) {
             container.innerHTML = `
-                <div class="x-post-card">
-                    <img class="x-avatar" src="${profileImage || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23334155\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%2394a3b8\' font-size=\'20\'%3E@%3C/text%3E%3C/svg%3E'}" alt="${authorName}">
-                    <div class="x-post-content">
-                        <div class="x-post-header">
-                            <span class="x-username">${authorName}</span>
-                            ${verified ? '<span class="verified-badge" style="display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: var(--primary); border-radius: 50%; color: white; font-size: 10px;">✓</span>' : ''}
-                            <span class="x-handle">@${authorUsername}</span>
-                        </div>
-                        <div class="x-post-text">${escapeHtml(post.text || '')}</div>
-                        ${post.url ? `<div style="margin-top: 0.5rem;"><a href="${post.url}" target="_blank" style="color: var(--primary); text-decoration: none; font-size: 13px;">View on X →</a></div>` : ''}
-                        <div class="x-post-engagement">
-                            <span class="x-engagement-item">
-                                <span>❤️</span>
-                                <span>${formatNumber(post.likes || 0)}</span>
-                            </span>
-                            <span class="x-engagement-item">
-                                <span>💬</span>
-                                <span>${formatNumber(post.replies || 0)}</span>
-                            </span>
-                            ${post.retweets ? `
-                            <span class="x-engagement-item">
-                                <span>🔄</span>
-                                <span>${formatNumber(post.retweets)}</span>
-                            </span>
-                            ` : ''}
-                        </div>
-                    </div>
+                <div style="text-align: center; padding: 2rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; margin: 1.5rem 0;">
+                    <div style="color: var(--error); margin-bottom: 1rem; font-weight: 600;">Failed to load Twitter post</div>
+                    <div style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 14px;">${errorMessage}</div>
+                    ${postUrl ? `<a href="${postUrl}" target="_blank" style="color: var(--primary); text-decoration: none; font-size: 14px;">View post on X →</a>` : ''}
                 </div>
             `;
         }
@@ -2640,21 +2611,21 @@
                                                 // Find the blockquote in the container
                                                 const blockquote = postContentElement.querySelector('blockquote.twitter-tweet');
                                                 if (blockquote) {
-                                                    // Load the widget
+                                                    // Load the widget - this will render the full Twitter post
                                                     window.twttr.widgets.load(blockquote)
                                                         .then(() => {
-                                                            console.log('Twitter widget loaded successfully');
+                                                            console.log('Twitter widget loaded successfully - post should be fully embedded');
                                                         })
                                                         .catch(err => {
-                                                            console.error('Error loading widget:', err);
+                                                            console.error('Error loading Twitter widget:', err);
                                                             // Try loading entire container as fallback
                                                             window.twttr.widgets.load(postContentElement)
                                                                 .then(() => {
                                                                     console.log('Twitter widget loaded from container');
                                                                 })
-                                                                .catch(() => {
-                                                                    console.warn('Failed to load widget, using custom post');
-                                                                    renderCustomPost(postContentElement, data.post);
+                                                                .catch(loadErr => {
+                                                                    console.error('Failed to load Twitter widget:', loadErr);
+                                                                    showEmbedError(postContentElement, 'Twitter widget failed to load. Please try refreshing the page.', data.post.url);
                                                                 });
                                                         });
                                                 } else {
@@ -2663,30 +2634,30 @@
                                                         .then(() => {
                                                             console.log('Twitter widget loaded from container');
                                                         })
-                                                        .catch(() => {
-                                                            console.warn('Failed to load widget, using custom post');
-                                                            renderCustomPost(postContentElement, data.post);
+                                                        .catch(loadErr => {
+                                                            console.error('Failed to load Twitter widget from container:', loadErr);
+                                                            showEmbedError(postContentElement, 'Twitter embed HTML not found. Please try refreshing the page.', data.post.url);
                                                         });
                                                 }
                                             } else {
                                                 console.error('Twitter widgets not available');
-                                                renderCustomPost(postContentElement, data.post);
+                                                showEmbedError(postContentElement, 'Twitter widgets script failed to load. Please refresh the page.', data.post.url);
                                             }
                                         }, 100);
                                     } else {
-                                        // Fallback to custom design
-                                        console.warn('oEmbed failed, using custom post:', oembedData.error);
-                                        renderCustomPost(postContentElement, data.post);
+                                        // oEmbed failed - show error, never use custom design
+                                        console.error('oEmbed failed:', oembedData.error);
+                                        showEmbedError(postContentElement, oembedData.error || 'Failed to fetch Twitter embed. Please try again.', data.post.url);
                                     }
                                 })
                                 .catch(error => {
                                     console.error('oEmbed fetch error:', error);
-                                    renderCustomPost(postContentElement, data.post);
+                                    showEmbedError(postContentElement, `Failed to fetch Twitter embed: ${error.message}. Please try again.`, data.post.url);
                                 });
                         } else {
-                            // No valid URL available, use custom design
-                            console.warn('Post missing valid URL:', data.post.url);
-                            renderCustomPost(postContentElement, data.post);
+                            // No valid URL available - show error
+                            console.error('Post missing valid URL:', data.post.url);
+                            showEmbedError(postContentElement, 'Post URL is missing or invalid. Cannot embed Twitter post.', null);
                         }
                     }
                 } else {
