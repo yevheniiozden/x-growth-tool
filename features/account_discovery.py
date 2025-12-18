@@ -402,12 +402,14 @@ def get_posts_for_onboarding(
                 reply_count = 0
                 retweet_count = 0
             
-            # Calculate relevance score using AI semantic analysis
-            # First try AI-based semantic relevance
+            # Calculate relevance score using AI semantic analysis (with fallback)
+            semantic_relevance = 0.0
             try:
-                semantic_relevance = analyze_post_relevance(text, keywords)
+                from services.ai_service import client as ai_client
+                if ai_client:
+                    semantic_relevance = analyze_post_relevance(text, keywords)
             except Exception as e:
-                print(f"Error in AI relevance analysis: {e}")
+                # Silently fall back to keyword matching if AI fails
                 semantic_relevance = 0.0
             
             # Also calculate keyword-based relevance as fallback/boost
