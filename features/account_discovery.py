@@ -1,7 +1,6 @@
 """Account Discovery Feature - Find relevant accounts based on keywords and criteria"""
 from typing import List, Dict, Any, Optional
 from services.x_api import client
-from services.ai_service import client as ai_client
 import config
 
 
