@@ -717,7 +717,7 @@ async def save_keywords_endpoint(request: Request):
 
 
 @app.post("/api/onboarding/relevance")
-async def save_relevance_endpoint(request: Request):
+async def save_relevance_endpoint(request: Request, background_tasks: BackgroundTasks):
     """Step 3: Save keyword relevance preferences"""
     user = await get_current_user_from_request(request)
     if not user:
@@ -727,8 +727,14 @@ async def save_relevance_endpoint(request: Request):
         data = await request.json()
         keyword_relevance = data.get("keyword_relevance", {})
         
-        from onboarding_flow import save_keyword_relevance
+        from onboarding_flow import save_keyword_relevance, _prepare_onboarding_data
+        
+        # Save relevance and get result (returns immediately)
         result = save_keyword_relevance(user.get("user_id"), keyword_relevance)
+        
+        # Add background task to prepare onboarding data (non-blocking)
+        background_tasks.add_task(_prepare_onboarding_data, user.get("user_id"))
+        
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
