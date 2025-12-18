@@ -1076,6 +1076,52 @@ async def onboarding_phase1_endpoint(request: Request, username: Optional[str] =
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/health/keys")
+async def health_check_keys():
+    """Check status of API keys"""
+    from services.ai_service import validate_openai_key
+    import config
+    
+    openai_status = validate_openai_key()
+    x_api_status = {
+        "valid": bool(config.X_API_KEY),
+        "error": None if config.X_API_KEY else "missing",
+        "message": "X API key configured" if config.X_API_KEY else "X API key not configured"
+    }
+    
+    return {
+        "openai": openai_status,
+        "x_api": x_api_status,
+        "overall": {
+            "openai_available": openai_status.get("valid") is True,
+            "x_api_available": x_api_status.get("valid") is True
+        }
+    }
+
+
+# Startup event to validate API keys
+@app.on_event("startup")
+async def startup_event():
+    """Validate API keys on startup and log warnings"""
+    from services.ai_service import validate_openai_key
+    import config
+    
+    # Check OpenAI API key
+    openai_status = validate_openai_key()
+    if not openai_status.get("valid"):
+        print(f"⚠️  WARNING: {openai_status.get('message')}")
+        print("   AI features will use fallback keyword matching")
+        print("   To enable AI features, update OPENAI_API_KEY in Railway environment variables")
+    else:
+        print("✓ OpenAI API key is valid")
+    
+    # Check X API key
+    if not config.X_API_KEY:
+        print("⚠️  WARNING: X_API_KEY not configured")
+    else:
+        print("✓ X API key is configured")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

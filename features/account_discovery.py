@@ -405,8 +405,18 @@ def get_posts_for_onboarding(
                 retweet_count = 0
                 view_count = 0
             
-            # Calculate relevance score using keyword matching (removed expensive AI calls)
-            # Simple but effective: check if keywords appear in text
+            # Calculate relevance score using AI semantic analysis (with fallback to keyword matching)
+            semantic_relevance = 0.0
+            try:
+                from services.ai_service import client as ai_client
+                if ai_client:
+                    # Use AI for semantic understanding when available
+                    semantic_relevance = analyze_post_relevance(text, keywords)
+            except Exception:
+                # Silently fall back to keyword matching if AI fails
+                semantic_relevance = 0.0
+            
+            # Also calculate keyword-based relevance as fallback/boost
             keyword_relevance_score = 0.0
             keyword_matches = 0
             for keyword in keywords:
@@ -422,7 +432,12 @@ def get_posts_for_onboarding(
             if keyword_matches > 1:
                 keyword_relevance_score = min(1.0, keyword_relevance_score * 1.2)
             
-            relevance_score = keyword_relevance_score
+            # Combine semantic and keyword relevance (70% semantic when available, 30% keyword)
+            # If AI unavailable, use keyword-only
+            if semantic_relevance > 0:
+                relevance_score = (semantic_relevance * 0.7) + (keyword_relevance_score * 0.3)
+            else:
+                relevance_score = keyword_relevance_score
             
             # Calculate total engagement
             total_engagement = like_count + reply_count + retweet_count

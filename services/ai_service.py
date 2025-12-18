@@ -3,6 +3,7 @@ import openai
 from typing import Dict, Any, List, Optional
 import config
 from core.persona_state import load_persona_state
+import time
 
 # Initialize OpenAI client
 if config.OPENAI_API_KEY:
@@ -10,6 +11,53 @@ if config.OPENAI_API_KEY:
     client = openai.OpenAI(api_key=config.OPENAI_API_KEY)
 else:
     client = None
+
+
+def validate_openai_key() -> Dict[str, Any]:
+    """
+    Validate OpenAI API key by making a simple test request
+    
+    Returns:
+        Dict with 'valid' (bool), 'error' (str if invalid), 'message' (str)
+    """
+    if not config.OPENAI_API_KEY:
+        return {
+            "valid": False,
+            "error": "missing",
+            "message": "OpenAI API key not configured"
+        }
+    
+    # Check format (OpenAI keys start with 'sk-')
+    if not config.OPENAI_API_KEY.startswith('sk-'):
+        return {
+            "valid": False,
+            "error": "invalid_format",
+            "message": "OpenAI API key format is invalid (should start with 'sk-')"
+        }
+    
+    # Test with a simple request
+    try:
+        test_client = openai.OpenAI(api_key=config.OPENAI_API_KEY)
+        # Make a minimal test request
+        test_client.models.list()
+        return {
+            "valid": True,
+            "error": None,
+            "message": "OpenAI API key is valid"
+        }
+    except openai.AuthenticationError as e:
+        return {
+            "valid": False,
+            "error": "authentication",
+            "message": f"OpenAI API key is invalid: {str(e)}"
+        }
+    except Exception as e:
+        # Network or other errors - key might be valid but can't test right now
+        return {
+            "valid": None,  # Unknown - can't verify
+            "error": "test_failed",
+            "message": f"Could not verify API key (network error): {str(e)}"
+        }
 
 
 def _get_persona_context(user_id: Optional[str] = None) -> str:
@@ -442,42 +490,70 @@ Return JSON with:
 }}
 """
     
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an expert at semantic keyword expansion for social media content discovery. Provide comprehensive related terms, synonyms, and context variations."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=1000,
-            response_format={"type": "json_object"}
-        )
-        
-        import json
-        result = json.loads(response.choices[0].message.content)
-        
-        # Ensure all keywords have expansions (fallback to original if missing)
-        expanded = result.get("expanded_keywords", {})
-        for keyword in keywords:
-            if keyword not in expanded:
-                expanded[keyword] = [keyword]
-        
-        return {
-            "expanded_keywords": expanded,
-            "related_terms": result.get("related_terms", {}),
-            "themes": result.get("themes", []),
-            "context": result.get("context", "")
-        }
-    except Exception as e:
-        print(f"Error expanding keywords semantically: {e}")
-        # Fallback: return original keywords
-        return {
-            "expanded_keywords": {k: [k] for k in keywords},
-            "related_terms": {},
-            "themes": [],
-            "context": ""
-        }
+    # Retry logic for transient failures
+    max_retries = 2
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert at semantic keyword expansion for social media content discovery. Provide comprehensive related terms, synonyms, and context variations."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1000,
+                response_format={"type": "json_object"}
+            )
+            
+            import json
+            result = json.loads(response.choices[0].message.content)
+            
+            # Ensure all keywords have expansions (fallback to original if missing)
+            expanded = result.get("expanded_keywords", {})
+            for keyword in keywords:
+                if keyword not in expanded:
+                    expanded[keyword] = [keyword]
+            
+            return {
+                "expanded_keywords": expanded,
+                "related_terms": result.get("related_terms", {}),
+                "themes": result.get("themes", []),
+                "context": result.get("context", "")
+            }
+        except openai.AuthenticationError as e:
+            # Invalid API key - don't retry
+            print(f"OpenAI API authentication error: {e}")
+            print("Please check your OPENAI_API_KEY in environment variables")
+            break
+        except openai.RateLimitError as e:
+            # Rate limit - retry with backoff
+            if attempt < max_retries:
+                wait_time = retry_delay * (2 ** attempt)
+                print(f"OpenAI rate limit hit, retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            else:
+                print(f"OpenAI rate limit error after {max_retries} retries: {e}")
+                break
+        except Exception as e:
+            # Other errors - retry once
+            if attempt < max_retries:
+                print(f"Error expanding keywords semantically (attempt {attempt + 1}), retrying...: {e}")
+                time.sleep(retry_delay)
+                continue
+            else:
+                print(f"Error expanding keywords semantically after {max_retries} retries: {e}")
+                break
+    
+    # Fallback: return original keywords
+    return {
+        "expanded_keywords": {k: [k] for k in keywords},
+        "related_terms": {},
+        "themes": [],
+        "context": ""
+    }
 
 
 def generate_search_queries(keywords: List[str], context: str = "") -> List[str]:
@@ -554,43 +630,72 @@ Return JSON with:
 {{"queries": ["query1", "query2", "query3", ...]}}
 """
         
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an expert at creating optimized X/Twitter search queries. Generate diverse, effective queries that find relevant and popular content."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.8,
-            max_tokens=500,
-            response_format={"type": "json_object"}
-        )
+        # Retry logic for transient failures
+        max_retries = 2
+        retry_delay = 1.0
         
-        import json
-        result = json.loads(response.choices[0].message.content)
+        for attempt in range(max_retries + 1):
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are an expert at creating optimized X/Twitter search queries. Generate diverse, effective queries that find relevant and popular content."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.8,
+                    max_tokens=500,
+                    response_format={"type": "json_object"}
+                )
+                
+                import json
+                result = json.loads(response.choices[0].message.content)
+                
+                queries = result.get("queries", [])
+                if queries and len(queries) > 0:
+                    # Validate queries have proper format
+                    validated_queries = []
+                    for q in queries:
+                        if isinstance(q, str) and len(q) > 0:
+                            # Ensure query has required filters
+                            if "-is:retweet" not in q:
+                                q += " -is:retweet"
+                            if "-is:reply" not in q:
+                                q += " -is:reply"
+                            if "lang:en" not in q:
+                                q += " lang:en"
+                            validated_queries.append(q)
+                    
+                    if validated_queries:
+                        return validated_queries[:5]  # Limit to 5 queries max
+                
+                # If AI queries invalid, use fallback
+                print("AI-generated queries invalid, using fallback queries")
+                return fallback_queries[:3]
+            except openai.AuthenticationError as e:
+                # Invalid API key - don't retry
+                print(f"OpenAI API authentication error: {e}")
+                print("Please check your OPENAI_API_KEY in environment variables")
+                break
+            except openai.RateLimitError as e:
+                # Rate limit - retry with backoff
+                if attempt < max_retries:
+                    wait_time = retry_delay * (2 ** attempt)
+                    print(f"OpenAI rate limit hit, retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"OpenAI rate limit error after {max_retries} retries: {e}")
+                    break
+            except Exception as e:
+                # Other errors - retry once
+                if attempt < max_retries:
+                    print(f"Error generating search queries with AI (attempt {attempt + 1}), retrying...: {e}")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    print(f"Error generating search queries with AI after {max_retries} retries: {e}")
+                    break
         
-        queries = result.get("queries", [])
-        if queries and len(queries) > 0:
-            # Validate queries have proper format
-            validated_queries = []
-            for q in queries:
-                if isinstance(q, str) and len(q) > 0:
-                    # Ensure query has required filters
-                    if "-is:retweet" not in q:
-                        q += " -is:retweet"
-                    if "-is:reply" not in q:
-                        q += " -is:reply"
-                    if "lang:en" not in q:
-                        q += " lang:en"
-                    validated_queries.append(q)
-            
-            if validated_queries:
-                return validated_queries[:5]  # Limit to 5 queries max
-        
-        # If AI queries invalid, use fallback
-        print("AI-generated queries invalid, using fallback queries")
-        return fallback_queries[:3]
-    except Exception as e:
-        print(f"Error generating search queries with AI: {e}")
         # Fallback: use basic queries
         return fallback_queries[:3]
 
@@ -631,28 +736,49 @@ Return a JSON object with:
 }}
 """
     
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You analyze post relevance to keywords using semantic understanding, not just literal matching."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=200,
-            response_format={"type": "json_object"}
-        )
-        
-        import json
-        result = json.loads(response.choices[0].message.content)
-        score = result.get("relevance_score", 0.0)
-        return max(0.0, min(1.0, float(score)))  # Clamp to 0-1
-    except Exception as e:
-        print(f"Error analyzing post relevance: {e}")
-        # Fallback: simple keyword matching
-        text_lower = post_text.lower()
-        matches = sum(1 for kw in keywords if kw.lower() in text_lower)
-        return min(1.0, matches / len(keywords)) if keywords else 0.0
+    # Retry logic for transient failures
+    max_retries = 1  # Only 1 retry for relevance analysis (called many times)
+    retry_delay = 0.5
+    
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You analyze post relevance to keywords using semantic understanding, not just literal matching."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=200,
+                response_format={"type": "json_object"}
+            )
+            
+            import json
+            result = json.loads(response.choices[0].message.content)
+            score = result.get("relevance_score", 0.0)
+            return max(0.0, min(1.0, float(score)))  # Clamp to 0-1
+        except openai.AuthenticationError:
+            # Invalid API key - don't retry, fallback silently
+            break
+        except openai.RateLimitError:
+            # Rate limit - retry once
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+                continue
+            else:
+                break
+        except Exception:
+            # Other errors - retry once
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+                continue
+            else:
+                break
+    
+    # Fallback: simple keyword matching (silent - don't spam logs)
+    text_lower = post_text.lower()
+    matches = sum(1 for kw in keywords if kw.lower() in text_lower)
+    return min(1.0, matches / len(keywords)) if keywords else 0.0
 
 
 def explain_persona_alignment(content: str, content_type: str = "post", user_id: Optional[str] = None) -> str:
