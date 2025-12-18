@@ -174,17 +174,19 @@ def save_keyword_relevance(user_id: str, keyword_relevance: Dict[str, float]) ->
         "phase1_responses": [],
         "phase2_responses": [],
         "phase3_responses": [],
-        "phase4_responses": []
+        "phase4_responses": [],
+        "data_preparing": True  # Flag to indicate data is being prepared
     }
     save_users(users)
     
-    # Discover accounts and cache posts for onboarding
-    _prepare_onboarding_data(user_id)
+    # Note: _prepare_onboarding_data will be called as background task in the endpoint
+    # Return immediately - data preparation happens asynchronously
     
     return {
         "success": True,
         "message": "Relevance preferences saved",
-        "step": 4
+        "step": 4,
+        "data_preparing": True
     }
 
 

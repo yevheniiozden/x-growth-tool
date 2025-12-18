@@ -28,101 +28,142 @@ def search_accounts_by_keywords(
     accounts = []
     
     try:
-        # Search for accounts using keywords
-        for keyword in keywords:
-            try:
-                # Search for tweets containing the keyword
-                tweets = client.search_recent_tweets(
-                    query=f"{keyword} -is:retweet lang:en",
-                    max_results=100,
-                    tweet_fields=['author_id', 'public_metrics', 'created_at'],
-                    user_fields=['username', 'name', 'description', 'public_metrics', 'verified']
-                )
-            except Exception as api_error:
-                # Handle 401 Unauthorized and other API errors gracefully
-                error_msg = str(api_error)
-                if "401" in error_msg or "Unauthorized" in error_msg:
-                    print(f"X API authentication error for keyword '{keyword}': {error_msg}")
-                    print("Please check your X_API_KEY in environment variables")
-                else:
-                    print(f"Error searching for keyword '{keyword}': {error_msg}")
-                continue
-            
-            if not tweets or not tweets.data:
-                continue
-            
-            # Get unique authors
-            author_ids = set()
-            for tweet in tweets.data:
-                if tweet.author_id:
-                    author_ids.add(tweet.author_id)
-            
-            # Fetch user details for authors
-            if author_ids:
-                user_ids = list(author_ids)[:20]  # Limit to avoid rate limits
-                users = client.get_users(ids=user_ids, user_fields=[
-                    'username', 'name', 'description', 'public_metrics', 'verified', 'profile_image_url'
-                ])
+        # OPTIMIZATION: Combine all keywords into single OR query instead of multiple searches
+        # This reduces API calls from N (one per keyword) to 1
+        if not keywords:
+            return accounts
+        
+        # Build combined query: (keyword1 OR keyword2 OR keyword3) -is:retweet lang:en
+        keyword_query = " OR ".join(keywords[:5])  # Limit to 5 keywords to avoid query length issues
+        combined_query = f"({keyword_query}) -is:retweet lang:en"
+        
+        try:
+            # Single search call for all keywords
+            tweets = client.search_recent_tweets(
+                query=combined_query,
+                max_results=min(100, max_results * 3),  # Get more tweets to filter from
+                tweet_fields=['author_id', 'public_metrics', 'created_at'],
+                user_fields=['username', 'name', 'description', 'public_metrics', 'verified']
+            )
+        except Exception as api_error:
+            # Handle 401 Unauthorized and other API errors gracefully
+            error_msg = str(api_error)
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                print(f"X API authentication error for combined keyword search: {error_msg}")
+                print("Please check your X_API_KEY in environment variables")
+            else:
+                print(f"Error searching for combined keywords: {error_msg}")
+            return accounts
+        
+        if not tweets or not tweets.data:
+            return accounts
+        
+        # Get unique authors from all tweets
+        author_ids = set()
+        author_keyword_map = {}  # Track which keywords matched for each author
+        
+        for tweet in tweets.data:
+            if tweet.author_id:
+                author_id = str(tweet.author_id)
+                author_ids.add(author_id)
                 
-                if users.data:
-                    for user in users.data:
-                        metrics = user.public_metrics
-                        # Handle both dict and object metrics
-                        if hasattr(metrics, 'followers_count'):
-                            followers = getattr(metrics, 'followers_count', 0)
-                            following_count = getattr(metrics, 'following_count', 0)
-                            tweet_count = getattr(metrics, 'tweet_count', 0)
-                        elif isinstance(metrics, dict):
-                            followers = metrics.get('followers_count', 0)
-                            following_count = metrics.get('following_count', 0)
-                            tweet_count = metrics.get('tweet_count', 0)
-                        else:
-                            followers = 0
-                            following_count = 0
-                            tweet_count = 0
-                        
-                        # Filter by criteria
-                        if followers < min_followers:
-                            continue
-                        
-                        # Calculate engagement rate (simplified)
-                        # We'd need more data for accurate calculation
-                        engagement_rate = 0.02  # Placeholder - would calculate from recent posts
-                        
-                        if engagement_rate < min_engagement_rate:
-                            continue
-                        
-                        # Check if account already in results
-                        if any(acc.get('id') == user.id for acc in accounts):
-                            continue
-                        
-                        # Calculate relevance score based on keyword match
-                        relevance_score = _calculate_relevance(user, keyword, keywords)
-                        
-                        accounts.append({
-                            'id': user.id,
-                            'username': user.username,
-                            'name': user.name,
-                            'description': user.description or '',
-                            'followers': followers,
-                            'following': following_count,
-                            'tweets': tweet_count,
-                            'verified': user.verified or False,
-                            'profile_image_url': getattr(user, 'profile_image_url', None),
-                            'relevance_score': relevance_score,
-                            'matched_keywords': [k for k in keywords if k.lower() in (user.description or '').lower()],
-                            'engagement_rate': engagement_rate
-                        })
+                # Track which keywords this tweet matches
+                tweet_text = (tweet.text or '').lower()
+                for keyword in keywords:
+                    if keyword.lower() in tweet_text:
+                        if author_id not in author_keyword_map:
+                            author_keyword_map[author_id] = []
+                        if keyword not in author_keyword_map[author_id]:
+                            author_keyword_map[author_id].append(keyword)
+        
+        # Fetch user details for authors in batches
+        if author_ids:
+            user_ids_list = list(author_ids)
+            # Process in batches of 100 to avoid API limits
+            for i in range(0, len(user_ids_list), 100):
+                batch_ids = user_ids_list[i:i+100]
+                try:
+                    users = client.get_users(ids=batch_ids, user_fields=[
+                        'username', 'name', 'description', 'public_metrics', 'verified', 'profile_image_url'
+                    ])
+                    
+                    users_data = None
+                    if hasattr(users, 'data'):
+                        users_data = users.data
+                    elif isinstance(users, list):
+                        users_data = users
+                    elif hasattr(users, 'users'):
+                        users_data = users.users
+                    
+                    if users_data:
+                        for user in users_data:
+                            user_id = str(user.id if hasattr(user, 'id') else (user.get('id') if isinstance(user, dict) else ''))
+                            if not user_id:
+                                continue
+                            
+                            metrics = user.public_metrics
+                            # Handle both dict and object metrics
+                            if hasattr(metrics, 'followers_count'):
+                                followers = getattr(metrics, 'followers_count', 0)
+                                following_count = getattr(metrics, 'following_count', 0)
+                                tweet_count = getattr(metrics, 'tweet_count', 0)
+                            elif isinstance(metrics, dict):
+                                followers = metrics.get('followers_count', 0)
+                                following_count = metrics.get('following_count', 0)
+                                tweet_count = metrics.get('tweet_count', 0)
+                            else:
+                                followers = 0
+                                following_count = 0
+                                tweet_count = 0
+                            
+                            # Filter by criteria
+                            if followers < min_followers:
+                                continue
+                            
+                            # Calculate engagement rate (simplified)
+                            engagement_rate = 0.02  # Placeholder
+                            
+                            if engagement_rate < min_engagement_rate:
+                                continue
+                            
+                            # Check if account already in results
+                            if any(acc.get('id') == user_id for acc in accounts):
+                                continue
+                            
+                            # Calculate relevance score based on matched keywords
+                            matched_keywords = author_keyword_map.get(user_id, keywords[:1])  # Fallback to first keyword
+                            relevance_score = 0.0
+                            for keyword in matched_keywords:
+                                score = _calculate_relevance(user, keyword, keywords)
+                                relevance_score = max(relevance_score, score)  # Use highest score
+                            
+                            accounts.append({
+                                'id': user_id,
+                                'username': user.username if hasattr(user, 'username') else (user.get('username') if isinstance(user, dict) else ''),
+                                'name': (user.name if hasattr(user, 'name') else (user.get('name') if isinstance(user, dict) else '')) or (user.username if hasattr(user, 'username') else ''),
+                                'description': user.description if hasattr(user, 'description') else (user.get('description') if isinstance(user, dict) else ''),
+                                'followers': followers,
+                                'following': following_count,
+                                'tweets': tweet_count,
+                                'verified': user.verified if hasattr(user, 'verified') else (user.get('verified') or user.get('isBlueVerified', False) if isinstance(user, dict) else False),
+                                'profile_image_url': user.profile_image_url if hasattr(user, 'profile_image_url') else (user.get('profile_image_url') or user.get('profilePicture', '') if isinstance(user, dict) else ''),
+                                'relevance_score': relevance_score,
+                                'matched_keywords': matched_keywords
+                            })
+                except Exception as e:
+                    print(f"Error fetching user batch: {e}")
+                    continue
         
         # Sort by relevance score
-        accounts.sort(key=lambda x: x['relevance_score'], reverse=True)
+        accounts.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
         
         # Remove duplicates and limit results
         seen = set()
         unique_accounts = []
         for acc in accounts:
-            if acc['id'] not in seen:
-                seen.add(acc['id'])
+            acc_id = acc.get('id')
+            if acc_id and acc_id not in seen:
+                seen.add(acc_id)
                 unique_accounts.append(acc)
                 if len(unique_accounts) >= max_results:
                     break
