@@ -837,21 +837,25 @@ async def get_oembed_endpoint(request: Request, url: str):
         
         try:
             import httpx
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
                 response = await client.get(oembed_url, params=params)
-                if response.status_code == 200:
-                    data = response.json()
-                    html = data.get("html", "")
-                    
-                    # Verify we got valid HTML
-                    if html and ('<blockquote' in html or 'twitter-tweet' in html):
-                        return {
-                            "success": True,
-                            "html": html,
-                            "width": data.get("width"),
-                            "height": data.get("height"),
-                            "url": url
-                        }
+                response.raise_for_status()
+                data = response.json()
+                html = data.get("html", "")
+                
+                # Verify we got valid HTML
+                if html and ('<blockquote' in html or 'twitter-tweet' in html):
+                    return {
+                        "success": True,
+                        "html": html,
+                        "width": data.get("width"),
+                        "height": data.get("height"),
+                        "url": url
+                    }
+        except httpx.HTTPStatusError as e:
+            print(f"oEmbed API HTTP error: {e.response.status_code} - {e.response.text}")
+        except httpx.RequestError as e:
+            print(f"oEmbed API request error: {e}")
         except Exception as e:
             print(f"oEmbed API error: {e}")
             import traceback
