@@ -309,15 +309,20 @@ def get_posts_for_onboarding(
             return []
         
         if not tweets or not tweets.data:
+            print(f"No tweets returned from API for query: {query}")
             return []
+        
+        tweet_list = list(tweets.data)
+        print(f"Received {len(tweet_list)} tweets from API")
         
         # First, collect all author IDs to fetch usernames in bulk
         author_ids_to_fetch = []
-        tweet_list = list(tweets.data)
         for tweet in tweet_list:
             author_id = tweet.author_id if hasattr(tweet, 'author_id') else (tweet.get('author_id') if isinstance(tweet, dict) else None)
             if author_id and str(author_id) not in author_ids_to_fetch:
                 author_ids_to_fetch.append(str(author_id))
+        
+        print(f"Found {len(author_ids_to_fetch)} unique author IDs to fetch")
         
         # Fetch usernames in bulk if we have author IDs - CRITICAL for embedding
         author_usernames = {}
@@ -348,12 +353,15 @@ def get_posts_for_onboarding(
                                     'profile_image': user.profile_image_url if hasattr(user, 'profile_image_url') else (user.get('profile_image_url') or user.get('profilePicture', '')),
                                     'verified': user.verified if hasattr(user, 'verified') else (user.get('verified') or user.get('isBlueVerified', False))
                                 }
+                print(f"Fetched usernames for {len(author_usernames)} authors")
             except Exception as e:
                 print(f"Error fetching author usernames: {e}")
                 import traceback
                 traceback.print_exc()
         
         # Score and filter posts
+        filtered_by_engagement = 0
+        filtered_by_username = 0
         for tweet in tweet_list:
             text = tweet.text
             metrics = tweet.public_metrics
@@ -386,13 +394,16 @@ def get_posts_for_onboarding(
             total_engagement = like_count + reply_count + retweet_count
             
             # Prioritize posts with significant traction - minimum engagement thresholds
+            # LOWERED thresholds to ensure we get posts - can be adjusted later
             min_engagement = {
-                'like': 50,      # Posts for liking should have at least 50 likes
-                'engage': 100,   # Posts for engagement should have at least 100 total engagement
-                'default': 30    # Default minimum for other types
-            }.get(post_type, 30)
+                'like': 10,      # Lowered from 50 to 10 - posts for liking should have at least 10 likes
+                'reply': 20,     # Posts for replying should have at least 20 total engagement
+                'engage': 30,    # Lowered from 100 to 30 - posts for engagement should have at least 30 total engagement
+                'default': 5     # Lowered from 30 to 5 - default minimum for other types
+            }.get(post_type, 5)
             
             if total_engagement < min_engagement:
+                filtered_by_engagement += 1
                 continue
             
             # Get post URL for embedding - CRITICAL: ensure we have valid username
@@ -414,6 +425,9 @@ def get_posts_for_onboarding(
             
             # Skip posts without valid usernames - they can't be embedded
             if author_username == 'unknown' or not tweet_id:
+                filtered_by_username += 1
+                if filtered_by_username <= 3:  # Log first few for debugging
+                    print(f"Filtered post: author_username={author_username}, tweet_id={tweet_id}, author_id={author_id}")
                 continue
             
             post_url = f"https://twitter.com/{author_username}/status/{tweet_id}"
@@ -440,6 +454,9 @@ def get_posts_for_onboarding(
                 'type': post_type,
                 'url': post_url  # Always valid URL since we skip posts without usernames
             })
+        
+        print(f"Filtered {filtered_by_engagement} posts by engagement threshold, {filtered_by_username} posts by missing username")
+        print(f"Added {len(posts)} posts after filtering")
         
         # Sort by combined score: relevance (40%) + popularity (60%)
         # This ensures we get posts that are both relevant AND have traction
