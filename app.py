@@ -633,18 +633,31 @@ async def analyze_keywords_endpoint(request: Request):
                 "suggestions": []
             }
         
-        # Analyze keywords with AI
-        from services.ai_service import client as ai_client
+        # Analyze keywords with AI - enhanced semantic expansion
+        from services.ai_service import client as ai_client, expand_keywords_semantically, generate_search_queries
         if not ai_client:
             return {
                 "success": True,
                 "keywords": keywords,
                 "analysis": "Keywords accepted",
-                "suggestions": []
+                "suggestions": [],
+                "expanded_keywords": {},
+                "search_queries": []
             }
         
-        keywords_str = ", ".join(keywords)
-        prompt = f"""Analyze these keywords for X/Twitter content discovery: {keywords_str}
+        try:
+            # Expand keywords semantically
+            expansion = expand_keywords_semantically(keywords)
+            expanded_keywords = expansion.get("expanded_keywords", {})
+            themes = expansion.get("themes", [])
+            context = expansion.get("context", "")
+            
+            # Generate optimized search queries
+            search_queries = generate_search_queries(keywords, context)
+            
+            # Also do basic analysis for backward compatibility
+            keywords_str = ", ".join(keywords)
+            prompt = f"""Analyze these keywords for X/Twitter content discovery: {keywords_str}
 
 Provide:
 1. Relevance score (1-10) for each keyword
@@ -657,8 +670,7 @@ Format as JSON with:
 - "overlapping": ["keyword1", "keyword2"] if any overlap
 - "summary": "brief analysis"
 """
-        
-        try:
+            
             response = ai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -685,7 +697,11 @@ Format as JSON with:
                 "keywords": keywords,
                 "ai_analysis": analysis.get("summary", analysis_text) if isinstance(analysis, dict) else analysis_text,
                 "analysis": analysis,
-                "suggestions": analysis.get("suggestions", []) if isinstance(analysis, dict) else []
+                "suggestions": analysis.get("suggestions", []) if isinstance(analysis, dict) else [],
+                "expanded_keywords": expanded_keywords,
+                "themes": themes,
+                "context": context,
+                "search_queries": search_queries[:3]  # Return first 3 queries as preview
             }
         except Exception as e:
             print(f"AI analysis error: {e}")
@@ -694,7 +710,9 @@ Format as JSON with:
                 "keywords": keywords,
                 "ai_analysis": "Keywords accepted (AI analysis unavailable)",
                 "analysis": {"summary": "Keywords accepted"},
-                "suggestions": []
+                "suggestions": [],
+                "expanded_keywords": {},
+                "search_queries": []
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

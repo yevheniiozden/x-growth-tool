@@ -401,6 +401,231 @@ Format as JSON array:
         return [{"error": f"Error generating replies: {str(e)}"}]
 
 
+def expand_keywords_semantically(keywords: List[str]) -> Dict[str, Any]:
+    """
+    Expand keywords semantically - generate related terms, synonyms, and context variations
+    
+    Args:
+        keywords: List of keywords to expand
+    
+    Returns:
+        Dict with expanded_keywords, related_terms, themes, and context
+    """
+    if not client or not keywords:
+        return {
+            "expanded_keywords": keywords,
+            "related_terms": {},
+            "themes": [],
+            "context": ""
+        }
+    
+    keywords_str = ", ".join(keywords)
+    prompt = f"""Analyze these keywords for X/Twitter content discovery: {keywords_str}
+
+For each keyword, provide:
+1. Related terms and synonyms (e.g., "SaaS" → "software as a service", "cloud software", "subscription software", "B2B software")
+2. Context variations and phrases people use when discussing this topic
+3. Underlying themes and topics (e.g., "Startup" → entrepreneurship, early-stage companies, funding, growth, innovation, founders)
+
+Return JSON with:
+{{
+  "expanded_keywords": {{
+    "keyword1": ["related_term1", "related_term2", ...],
+    "keyword2": ["related_term1", "related_term2", ...]
+  }},
+  "related_terms": {{
+    "keyword1": ["synonym1", "synonym2", ...],
+    "keyword2": ["synonym1", "synonym2", ...]
+  }},
+  "themes": ["theme1", "theme2", ...],
+  "context": "Brief description of the overall context and intent behind these keywords"
+}}
+"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert at semantic keyword expansion for social media content discovery. Provide comprehensive related terms, synonyms, and context variations."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=1000,
+            response_format={"type": "json_object"}
+        )
+        
+        import json
+        result = json.loads(response.choices[0].message.content)
+        
+        # Ensure all keywords have expansions (fallback to original if missing)
+        expanded = result.get("expanded_keywords", {})
+        for keyword in keywords:
+            if keyword not in expanded:
+                expanded[keyword] = [keyword]
+        
+        return {
+            "expanded_keywords": expanded,
+            "related_terms": result.get("related_terms", {}),
+            "themes": result.get("themes", []),
+            "context": result.get("context", "")
+        }
+    except Exception as e:
+        print(f"Error expanding keywords semantically: {e}")
+        # Fallback: return original keywords
+        return {
+            "expanded_keywords": {k: [k] for k in keywords},
+            "related_terms": {},
+            "themes": [],
+            "context": ""
+        }
+
+
+def generate_search_queries(keywords: List[str], context: str = "") -> List[str]:
+    """
+    Generate optimized search queries for X/Twitter API
+    
+    Args:
+        keywords: List of keywords
+        context: Optional context about the search intent
+    
+    Returns:
+        List of search query strings optimized for X API
+    """
+    if not client or not keywords:
+        # Fallback: simple OR query
+        return [" OR ".join(keywords[:3]) + " -is:retweet -is:reply lang:en"]
+    
+    # First expand keywords semantically
+    expansion = expand_keywords_semantically(keywords)
+    expanded_keywords = expansion.get("expanded_keywords", {})
+    themes = expansion.get("themes", [])
+    
+    # Collect all terms
+    all_terms = []
+    for keyword, expansions in expanded_keywords.items():
+        all_terms.extend([keyword] + expansions[:3])  # Limit expansions per keyword
+    
+    # Add themes as additional search terms
+    all_terms.extend(themes[:5])
+    
+    # Generate multiple query variations
+    prompt = f"""Generate 3-5 optimized search queries for X/Twitter API based on these keywords and context.
+
+Keywords: {', '.join(keywords)}
+Context: {context if context else 'General content discovery'}
+Expanded terms: {', '.join(all_terms[:20])}  # Limit to avoid token issues
+
+Create diverse search queries that will find:
+1. Posts with exact keywords
+2. Posts with related terms and synonyms
+3. Posts discussing the underlying themes
+4. Popular posts in this niche
+
+Each query should:
+- Use X/Twitter search syntax
+- Include filters: -is:retweet -is:reply lang:en
+- Be optimized for finding engaging, popular content
+- Be different from others (different angles/combinations)
+
+Return JSON array:
+["query1", "query2", "query3", ...]
+"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert at creating optimized X/Twitter search queries. Generate diverse, effective queries that find relevant and popular content."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.8,
+            max_tokens=500,
+            response_format={"type": "json_object"}
+        )
+        
+        import json
+        result = json.loads(response.choices[0].message.content)
+        
+        queries = result.get("queries", [])
+        if not queries:
+            # Fallback: create queries from expanded terms
+            queries = []
+            # Query 1: Original keywords
+            queries.append(" OR ".join(keywords[:3]) + " -is:retweet -is:reply lang:en")
+            # Query 2: Mix of original and expanded
+            if all_terms:
+                queries.append(" OR ".join(all_terms[:5]) + " -is:retweet -is:reply lang:en")
+            # Query 3: Themes if available
+            if themes:
+                queries.append(" OR ".join(themes[:3]) + " -is:retweet -is:reply lang:en")
+        
+        return queries[:5]  # Limit to 5 queries max
+    except Exception as e:
+        print(f"Error generating search queries: {e}")
+        # Fallback: simple OR query
+        return [" OR ".join(keywords[:3]) + " -is:retweet -is:reply lang:en"]
+
+
+def analyze_post_relevance(post_text: str, keywords: List[str]) -> float:
+    """
+    Analyze how relevant a post is to the keywords using semantic understanding
+    
+    Args:
+        post_text: Post text to analyze
+        keywords: List of keywords to match against
+    
+    Returns:
+        Relevance score (0.0-1.0)
+    """
+    if not client or not post_text or not keywords:
+        # Fallback: simple keyword matching
+        text_lower = post_text.lower()
+        matches = sum(1 for kw in keywords if kw.lower() in text_lower)
+        return min(1.0, matches / len(keywords)) if keywords else 0.0
+    
+    keywords_str = ", ".join(keywords)
+    prompt = f"""Analyze how relevant this post is to these keywords: {keywords_str}
+
+Post text:
+{post_text[:500]}
+
+Consider:
+- Direct keyword matches
+- Semantic similarity (related concepts, synonyms)
+- Contextual relevance (discussing related topics)
+- Thematic alignment
+
+Return a JSON object with:
+{{
+  "relevance_score": 0.0-1.0,
+  "reasoning": "Brief explanation"
+}}
+"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You analyze post relevance to keywords using semantic understanding, not just literal matching."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=200,
+            response_format={"type": "json_object"}
+        )
+        
+        import json
+        result = json.loads(response.choices[0].message.content)
+        score = result.get("relevance_score", 0.0)
+        return max(0.0, min(1.0, float(score)))  # Clamp to 0-1
+    except Exception as e:
+        print(f"Error analyzing post relevance: {e}")
+        # Fallback: simple keyword matching
+        text_lower = post_text.lower()
+        matches = sum(1 for kw in keywords if kw.lower() in text_lower)
+        return min(1.0, matches / len(keywords)) if keywords else 0.0
+
+
 def explain_persona_alignment(content: str, content_type: str = "post", user_id: Optional[str] = None) -> str:
     """
     Generate explanation of why content aligns with persona

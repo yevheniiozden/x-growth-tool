@@ -1,6 +1,7 @@
 """Account Discovery Feature - Find relevant accounts based on keywords and criteria"""
 from typing import List, Dict, Any, Optional
 from services.x_api import client
+from services.ai_service import expand_keywords_semantically, generate_search_queries, analyze_post_relevance
 import config
 
 
@@ -281,39 +282,57 @@ def get_posts_for_onboarding(
         return []
     
     posts = []
+    all_tweets = []  # Collect tweets from all queries
     
     try:
-        # Build search query from keywords
-        query_parts = []
-        for keyword in keywords[:3]:  # Use top 3 keywords
-            query_parts.append(keyword)
+        # Step 1: Expand keywords semantically and generate search queries
+        print(f"Expanding {len(keywords)} keywords semantically...")
+        expansion = expand_keywords_semantically(keywords)
+        context = expansion.get("context", "")
         
-        # Filter out retweets AND replies - only show original posts
-        query = " OR ".join(query_parts) + " -is:retweet -is:reply lang:en"
+        print(f"Generating AI-optimized search queries...")
+        search_queries = generate_search_queries(keywords, context)
+        print(f"Generated {len(search_queries)} search queries")
         
-        # Search for recent tweets - OPTIMIZED: reduced max_results to save API credits
-        try:
-            tweets = client.search_recent_tweets(
-                query=query,
-                max_results=60,  # Reduced from 100 to 60 to save API credits while still getting enough posts
-                tweet_fields=['author_id', 'public_metrics', 'created_at', 'text', 'conversation_id'],
-                user_fields=['username', 'name']
-            )
-        except Exception as api_error:
-            error_msg = str(api_error)
-            if "401" in error_msg or "Unauthorized" in error_msg:
-                print(f"X API authentication error getting posts: {error_msg}")
-                print("Please check your X_API_KEY in environment variables")
-            else:
-                print(f"Error getting posts for onboarding: {error_msg}")
+        # Step 2: Execute multiple search queries and combine results
+        for i, query in enumerate(search_queries):
+            try:
+                print(f"Executing search query {i+1}/{len(search_queries)}: {query[:80]}...")
+                tweets = client.search_recent_tweets(
+                    query=query,
+                    max_results=40,  # Reduced per query since we're running multiple
+                    tweet_fields=['author_id', 'public_metrics', 'created_at', 'text', 'conversation_id'],
+                    user_fields=['username', 'name']
+                )
+                
+                if tweets and tweets.data:
+                    tweet_list = list(tweets.data)
+                    print(f"Query {i+1} returned {len(tweet_list)} tweets")
+                    all_tweets.extend(tweet_list)
+                else:
+                    print(f"Query {i+1} returned no tweets")
+            except Exception as api_error:
+                error_msg = str(api_error)
+                if "401" in error_msg or "Unauthorized" in error_msg:
+                    print(f"X API authentication error for query {i+1}: {error_msg}")
+                else:
+                    print(f"Error executing query {i+1}: {error_msg}")
+                continue
+        
+        # Deduplicate tweets by ID
+        seen_tweet_ids = set()
+        tweet_list = []
+        for tweet in all_tweets:
+            tweet_id = tweet.id if hasattr(tweet, 'id') else (tweet.get('id') if isinstance(tweet, dict) else None)
+            if tweet_id and str(tweet_id) not in seen_tweet_ids:
+                seen_tweet_ids.add(str(tweet_id))
+                tweet_list.append(tweet)
+        
+        print(f"Total unique tweets after combining queries: {len(tweet_list)}")
+        
+        if not tweet_list:
+            print("No tweets found from any search query")
             return []
-        
-        if not tweets or not tweets.data:
-            print(f"No tweets returned from API for query: {query}")
-            return []
-        
-        tweet_list = list(tweets.data)
-        print(f"Received {len(tweet_list)} tweets from API")
         
         # First, collect all author IDs to fetch usernames in bulk
         author_ids_to_fetch = []
@@ -380,15 +399,26 @@ def get_posts_for_onboarding(
                 reply_count = 0
                 retweet_count = 0
             
-            # Calculate relevance score
-            relevance_score = 0.0
+            # Calculate relevance score using AI semantic analysis
+            # First try AI-based semantic relevance
+            try:
+                semantic_relevance = analyze_post_relevance(text, keywords)
+            except Exception as e:
+                print(f"Error in AI relevance analysis: {e}")
+                semantic_relevance = 0.0
+            
+            # Also calculate keyword-based relevance as fallback/boost
+            keyword_relevance_score = 0.0
             for keyword in keywords:
                 if keyword.lower() in text.lower():
                     relevance = keyword_relevance.get(keyword, 0.5)
-                    relevance_score += relevance
+                    keyword_relevance_score += relevance
             
-            # Normalize score
-            relevance_score = min(1.0, relevance_score / len(keywords))
+            # Normalize keyword relevance
+            keyword_relevance_score = min(1.0, keyword_relevance_score / len(keywords)) if keywords else 0.0
+            
+            # Combine semantic and keyword relevance (70% semantic, 30% keyword)
+            relevance_score = (semantic_relevance * 0.7) + (keyword_relevance_score * 0.3)
             
             # Calculate total engagement
             total_engagement = like_count + reply_count + retweet_count
@@ -436,6 +466,29 @@ def get_posts_for_onboarding(
             # Likes are most important, then replies, then retweets
             popularity_score = (like_count * 1.0) + (reply_count * 1.5) + (retweet_count * 0.8)
             
+            # Calculate quality score based on content signals
+            quality_score = 0.0
+            # Check for threads (conversation_id indicates potential thread)
+            if hasattr(tweet, 'conversation_id') and tweet.conversation_id:
+                conversation_id = tweet.conversation_id if hasattr(tweet, 'conversation_id') else (tweet.get('conversation_id') if isinstance(tweet, dict) else None)
+                if conversation_id and str(conversation_id) == str(tweet_id):
+                    quality_score += 0.2  # Original thread starter
+            
+            # Check for detailed/educational content (longer posts)
+            if len(text.split()) > 50:
+                quality_score += 0.2
+            
+            # Verified authors get quality boost
+            if author_verified:
+                quality_score += 0.1
+            
+            # High engagement relative to account size (if we had follower data, would calculate engagement rate)
+            # For now, just boost posts with very high engagement
+            if total_engagement > 500:
+                quality_score += 0.1
+            
+            quality_score = min(1.0, quality_score)
+            
             posts.append({
                 'id': str(tweet_id),
                 'text': text,
@@ -450,6 +503,7 @@ def get_posts_for_onboarding(
                 'retweets': retweet_count,
                 'relevance_score': relevance_score,
                 'popularity_score': popularity_score,
+                'quality_score': quality_score,
                 'total_engagement': total_engagement,
                 'type': post_type,
                 'url': post_url  # Always valid URL since we skip posts without usernames
@@ -458,15 +512,69 @@ def get_posts_for_onboarding(
         print(f"Filtered {filtered_by_engagement} posts by engagement threshold, {filtered_by_username} posts by missing username")
         print(f"Added {len(posts)} posts after filtering")
         
-        # Sort by combined score: relevance (40%) + popularity (60%)
-        # This ensures we get posts that are both relevant AND have traction
-        posts.sort(key=lambda x: (
-            x['relevance_score'] * 0.4 + 
-            min(x['popularity_score'] / 1000, 1.0) * 0.6  # Normalize popularity to 0-1
-        ), reverse=True)
+        if not posts:
+            return []
         
-        # Limit to max_results
-        posts = posts[:max_results]
+        # Calculate final scores for diverse selection
+        # Normalize popularity score (divide by max to get 0-1 range)
+        max_popularity = max((p['popularity_score'] for p in posts), default=1.0)
+        for post in posts:
+            post['normalized_popularity'] = min(1.0, post['popularity_score'] / max_popularity) if max_popularity > 0 else 0.0
+        
+        # Calculate combined score: relevance (35%) + popularity (40%) + quality (25%)
+        for post in posts:
+            post['combined_score'] = (
+                post['relevance_score'] * 0.35 +
+                post['normalized_popularity'] * 0.40 +
+                post['quality_score'] * 0.25
+            )
+        
+        # Sort by combined score
+        posts.sort(key=lambda x: x['combined_score'], reverse=True)
+        
+        # Implement diverse selection strategy:
+        # 30% highly relevant (top relevance scores)
+        # 30% highly popular (top popularity scores)
+        # 40% balanced (top combined scores)
+        total_needed = max_results
+        highly_relevant_count = int(total_needed * 0.3)
+        highly_popular_count = int(total_needed * 0.3)
+        balanced_count = total_needed - highly_relevant_count - highly_popular_count
+        
+        # Sort by different criteria
+        by_relevance = sorted(posts, key=lambda x: x['relevance_score'], reverse=True)
+        by_popularity = sorted(posts, key=lambda x: x['normalized_popularity'], reverse=True)
+        by_combined = sorted(posts, key=lambda x: x['combined_score'], reverse=True)
+        
+        # Select diverse mix
+        selected_posts = []
+        seen_ids = set()
+        
+        # Add highly relevant posts
+        for post in by_relevance[:highly_relevant_count]:
+            if post['id'] not in seen_ids:
+                selected_posts.append(post)
+                seen_ids.add(post['id'])
+        
+        # Add highly popular posts
+        for post in by_popularity[:highly_popular_count]:
+            if post['id'] not in seen_ids:
+                selected_posts.append(post)
+                seen_ids.add(post['id'])
+        
+        # Fill remaining with balanced posts
+        for post in by_combined:
+            if len(selected_posts) >= total_needed:
+                break
+            if post['id'] not in seen_ids:
+                selected_posts.append(post)
+                seen_ids.add(post['id'])
+        
+        # Sort final selection by combined score
+        selected_posts.sort(key=lambda x: x['combined_score'], reverse=True)
+        posts = selected_posts[:max_results]
+        
+        print(f"Selected {len(posts)} posts using diverse selection strategy (relevance: {highly_relevant_count}, popularity: {highly_popular_count}, balanced: {balanced_count})")
         
         # Verify all posts have URLs (they should all have URLs since we skip posts without usernames)
         posts_with_urls = [p for p in posts if p.get('url')]
