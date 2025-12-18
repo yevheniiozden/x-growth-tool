@@ -274,6 +274,20 @@ def get_posts_for_onboarding(
             text = tweet.text
             metrics = tweet.public_metrics
             
+            # Handle both dict and object metrics
+            if hasattr(metrics, 'like_count'):
+                like_count = getattr(metrics, 'like_count', 0)
+                reply_count = getattr(metrics, 'reply_count', 0)
+                retweet_count = getattr(metrics, 'retweet_count', 0)
+            elif isinstance(metrics, dict):
+                like_count = metrics.get('like_count', 0)
+                reply_count = metrics.get('reply_count', 0)
+                retweet_count = metrics.get('retweet_count', 0)
+            else:
+                like_count = 0
+                reply_count = 0
+                retweet_count = 0
+            
             # Calculate relevance score
             relevance_score = 0.0
             for keyword in keywords:
@@ -286,11 +300,7 @@ def get_posts_for_onboarding(
             
             # Filter by engagement (for engagement-type posts)
             if post_type == 'engage':
-                total_engagement = (
-                    metrics.get('like_count', 0) +
-                    metrics.get('reply_count', 0) +
-                    metrics.get('retweet_count', 0)
-                )
+                total_engagement = like_count + reply_count + retweet_count
                 if total_engagement < 10:  # Minimum engagement threshold
                     continue
             
@@ -300,9 +310,9 @@ def get_posts_for_onboarding(
                 'author_id': tweet.author_id,
                 'author_username': getattr(tweet, 'author_username', 'unknown'),
                 'created_at': str(tweet.created_at) if hasattr(tweet, 'created_at') else None,
-                'likes': metrics.get('like_count', 0),
-                'replies': metrics.get('reply_count', 0),
-                'retweets': metrics.get('retweet_count', 0),
+                'likes': like_count,
+                'replies': reply_count,
+                'retweets': retweet_count,
                 'relevance_score': relevance_score,
                 'type': post_type
             })
@@ -364,15 +374,32 @@ def get_account_feed(account_id: str, max_posts: int = 20) -> List[Dict[str, Any
         posts = []
         for tweet in tweets.data:
             metrics = tweet.public_metrics
+            # Handle both dict and object metrics
+            if hasattr(metrics, 'like_count'):
+                like_count = getattr(metrics, 'like_count', 0)
+                reply_count = getattr(metrics, 'reply_count', 0)
+                retweet_count = getattr(metrics, 'retweet_count', 0)
+                quote_count = getattr(metrics, 'quote_count', 0)
+            elif isinstance(metrics, dict):
+                like_count = metrics.get('like_count', 0)
+                reply_count = metrics.get('reply_count', 0)
+                retweet_count = metrics.get('retweet_count', 0)
+                quote_count = metrics.get('quote_count', 0)
+            else:
+                like_count = 0
+                reply_count = 0
+                retweet_count = 0
+                quote_count = 0
+            
             posts.append({
                 'id': tweet.id,
                 'text': tweet.text,
                 'author_id': tweet.author_id,
                 'created_at': str(tweet.created_at) if hasattr(tweet, 'created_at') else None,
-                'likes': metrics.get('like_count', 0),
-                'replies': metrics.get('reply_count', 0),
-                'retweets': metrics.get('retweet_count', 0),
-                'quotes': metrics.get('quote_count', 0)
+                'likes': like_count,
+                'replies': reply_count,
+                'retweets': retweet_count,
+                'quotes': quote_count
             })
         
         return posts
