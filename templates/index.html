@@ -2331,6 +2331,15 @@
                                     `;
                                     
                                     // Load Twitter widgets script if not already loaded
+                                    const loadTwitterWidgets = () => {
+                                        if (window.twttr && window.twttr.widgets) {
+                                            window.twttr.widgets.load(postContentElement);
+                                        } else {
+                                            // Wait a bit and try again
+                                            setTimeout(loadTwitterWidgets, 100);
+                                        }
+                                    };
+                                    
                                     if (!window.twttr) {
                                         const script = document.createElement('script');
                                         script.src = 'https://platform.twitter.com/widgets.js';
@@ -2341,15 +2350,11 @@
                                         
                                         // Wait for script to load, then initialize
                                         script.onload = function() {
-                                            if (window.twttr && window.twttr.widgets) {
-                                                window.twttr.widgets.load(postContentElement);
-                                            }
+                                            setTimeout(loadTwitterWidgets, 500);
                                         };
                                     } else {
-                                        // Re-initialize widgets
-                                        if (window.twttr && window.twttr.widgets) {
-                                            window.twttr.widgets.load(postContentElement);
-                                        }
+                                        // Re-initialize widgets immediately
+                                        loadTwitterWidgets();
                                     }
                                 } else {
                                     // Fallback to custom design

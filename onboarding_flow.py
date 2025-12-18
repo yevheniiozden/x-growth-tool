@@ -193,24 +193,66 @@ def get_interactive_onboarding_status(user_id: str) -> Dict[str, Any]:
     
     phase = interactive.get("phase", 1)
     
-    # Calculate progress
-    phase_counts = {1: 20, 2: 10, 3: 20, 4: 10}  # Default counts
-    current_index = interactive.get(f"phase{phase}_index", 0)
-    total = phase_counts.get(phase, 10)
+    # Calculate progress for current phase
+    phase_index_key = f"phase{phase}_index"
+    current_index = interactive.get(phase_index_key, 0)
     
-    # Calculate overall progress
+    # Get response counts for detailed progress
+    phase_responses_key = f"phase{phase}_responses"
+    responses = interactive.get(phase_responses_key, [])
+    
+    # Count responses by type - handle both old and new response formats
+    liked_count = 0
+    skipped_count = 0
+    engaged_count = 0
+    
+    for r in responses:
+        if not r:
+            continue
+        response_val = r.get('response') or r.get('response_value') or r.get('response_type', '')
+        response_value = r.get('response_value') or r.get('response', '')
+        
+        # Phase 1, 3, 4: yes/like/subscribe = liked, no/skip = skipped
+        if phase in [1, 3, 4]:
+            if response_val in ['yes', 'like', 'subscribe'] or response_value in ['yes', 'like', 'subscribe']:
+                liked_count += 1
+            elif response_val in ['no', 'skip'] or response_value in ['no', 'skip']:
+                skipped_count += 1
+        # Phase 2: yes = engaged, no = skipped
+        elif phase == 2:
+            if response_val == 'yes' or response_value == 'yes':
+                engaged_count += 1
+            elif response_val == 'no' or response_value == 'no':
+                skipped_count += 1
+    
+    # Get total items for this phase
+    total_items = {
+        1: 20,  # Content preference
+        2: 10,  # Engagement preference
+        3: 20,  # Like/skip preference
+        4: 10   # Profile subscription
+    }.get(phase, 20)
+    
+    # Calculate overall progress across all phases
     total_phases = 4
     completed_phases = phase - 1
-    phase_progress = current_index / total if total > 0 else 0
+    phase_progress = (current_index + 1) / total_items if total_items > 0 else 0
     overall_progress = (completed_phases + phase_progress) / total_phases
+    
+    remaining = max(0, total_items - (current_index + 1))
     
     return {
         "active": True,
         "phase": phase,
         "current_index": current_index,
-        "total": total,
-        "progress": overall_progress,
-        "phase_progress": phase_progress
+        "total": total_items,
+        "progress": min(1.0, overall_progress),
+        "phase_progress": phase_progress,
+        "remaining": remaining,
+        "liked": liked_count,
+        "skipped": skipped_count,
+        "engaged": engaged_count,
+        "completed": current_index + 1
     }
 
 
