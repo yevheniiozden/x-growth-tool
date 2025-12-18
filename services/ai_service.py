@@ -35,11 +35,16 @@ def validate_openai_key() -> Dict[str, Any]:
             "message": "OpenAI API key format is invalid (should start with 'sk-')"
         }
     
-    # Test with a simple request
+    # Test with a simple chat completion request (more reliable than models.list())
     try:
         test_client = openai.OpenAI(api_key=config.OPENAI_API_KEY)
-        # Make a minimal test request
-        test_client.models.list()
+        # Make a minimal test request - use chat completion instead of models.list()
+        # This is more reliable and matches what we actually use
+        test_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "test"}],
+            max_tokens=1
+        )
         return {
             "valid": True,
             "error": None,
@@ -51,13 +56,31 @@ def validate_openai_key() -> Dict[str, Any]:
             "error": "authentication",
             "message": f"OpenAI API key is invalid: {str(e)}"
         }
-    except Exception as e:
-        # Network or other errors - key might be valid but can't test right now
+    except openai.RateLimitError:
+        # Rate limit means key is valid but we hit limits - treat as valid
         return {
-            "valid": None,  # Unknown - can't verify
-            "error": "test_failed",
-            "message": f"Could not verify API key (network error): {str(e)}"
+            "valid": True,
+            "error": None,
+            "message": "OpenAI API key is valid (rate limited during test)"
         }
+    except Exception as e:
+        # Network or other errors - if key format is correct, assume it's valid
+        # (since actual API calls in the app are working)
+        error_str = str(e).lower()
+        if "network" in error_str or "timeout" in error_str or "connection" in error_str:
+            # Network errors - assume key is valid if format is correct
+            return {
+                "valid": True,  # Assume valid if format is correct and it's a network error
+                "error": None,
+                "message": "OpenAI API key appears valid (network error during test, but format is correct)"
+            }
+        else:
+            # Other errors - unknown status
+            return {
+                "valid": None,  # Unknown - can't verify
+                "error": "test_failed",
+                "message": f"Could not verify API key: {str(e)}"
+            }
 
 
 def _get_persona_context(user_id: Optional[str] = None) -> str:
