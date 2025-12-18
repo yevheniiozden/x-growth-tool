@@ -55,19 +55,27 @@ DEFAULT_PERSONA_STATE = {
 }
 
 
-def load_persona_state() -> Dict[str, Any]:
+def load_persona_state(user_id: Optional[str] = None) -> Dict[str, Any]:
     """Load Persona State from JSON file, create default if doesn't exist"""
-    if config.PERSONA_STATE_FILE.exists():
+    # Use user-specific file if user_id provided
+    if user_id:
+        from core.auth import get_user_data_dir
+        user_dir = get_user_data_dir(user_id)
+        persona_file = user_dir / "persona_state.json"
+    else:
+        persona_file = config.PERSONA_STATE_FILE
+    
+    if persona_file.exists():
         try:
-            with open(config.PERSONA_STATE_FILE, 'r', encoding='utf-8') as f:
+            with open(persona_file, 'r', encoding='utf-8') as f:
                 state = json.load(f)
                 # Merge with defaults to ensure all keys exist
                 return _merge_with_defaults(state)
         except (json.JSONDecodeError, IOError) as e:
             print(f"Error loading persona state: {e}. Using defaults.")
-            return _create_default_state()
+            return _create_default_state(user_id)
     else:
-        return _create_default_state()
+        return _create_default_state(user_id)
 
 
 def _merge_with_defaults(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -83,14 +91,14 @@ def _merge_with_defaults(state: Dict[str, Any]) -> Dict[str, Any]:
     return merged
 
 
-def _create_default_state() -> Dict[str, Any]:
+def _create_default_state(user_id: Optional[str] = None) -> Dict[str, Any]:
     """Create and save default Persona State"""
     state = json.loads(json.dumps(DEFAULT_PERSONA_STATE))  # Deep copy
-    save_persona_state(state)
+    save_persona_state(state, user_id)
     return state
 
 
-def save_persona_state(state: Dict[str, Any]) -> None:
+def save_persona_state(state: Dict[str, Any], user_id: Optional[str] = None) -> None:
     """Save Persona State to JSON file"""
     # Validate state structure
     state = _validate_state(state)
@@ -99,7 +107,15 @@ def save_persona_state(state: Dict[str, Any]) -> None:
     if "learning_history" in state:
         state["learning_history"]["last_updated"] = datetime.now().isoformat()
     
-    with open(config.PERSONA_STATE_FILE, 'w', encoding='utf-8') as f:
+    # Use user-specific file if user_id provided
+    if user_id:
+        from core.auth import get_user_data_dir
+        user_dir = get_user_data_dir(user_id)
+        persona_file = user_dir / "persona_state.json"
+    else:
+        persona_file = config.PERSONA_STATE_FILE
+    
+    with open(persona_file, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
 
 
@@ -146,9 +162,9 @@ def _validate_state(state: Dict[str, Any]) -> Dict[str, Any]:
     return validated
 
 
-def update_from_feedback(feedback_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
+def update_from_feedback(feedback_type: str, data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
     """Update Persona State from feedback (incremental updates only)"""
-    state = load_persona_state()
+    state = load_persona_state(user_id)
     changes = []
     
     # Maximum change per update (0.1 = 10%)
@@ -241,7 +257,7 @@ def update_from_feedback(feedback_type: str, data: Dict[str, Any]) -> Dict[str, 
         elif action == "edit":
             state["learning_history"]["total_edits"] += 1
     
-    save_persona_state(state)
+    save_persona_state(state, user_id)
     
     return {
         "state": state,
@@ -250,9 +266,9 @@ def update_from_feedback(feedback_type: str, data: Dict[str, Any]) -> Dict[str, 
     }
 
 
-def get_persona_explanation() -> str:
+def get_persona_explanation(user_id: Optional[str] = None) -> str:
     """Generate human-readable explanation of current Persona State"""
-    state = load_persona_state()
+    state = load_persona_state(user_id)
     
     lines = []
     lines.append("=== PERSONA STATE SUMMARY ===\n")

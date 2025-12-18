@@ -7,7 +7,8 @@ from core.persona_state import load_persona_state, update_from_feedback
 def process_explicit_feedback(
     action: str,
     content: Optional[str] = None,
-    original_content: Optional[str] = None
+    original_content: Optional[str] = None,
+    user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Process explicit feedback: edits, approvals, rejections
@@ -16,22 +17,23 @@ def process_explicit_feedback(
         action: 'approval', 'rejection', 'edit'
         content: Final content (if edit or approval)
         original_content: Original content (if edit)
+        user_id: User ID for user-specific persona state
     """
-    state = load_persona_state()
+    state = load_persona_state(user_id)
     updates = []
     
     if action == "approval":
         # User approved content - learn from what they kept
         update_from_feedback("engagement_behavior", {
             "action": "approval"
-        })
+        }, user_id)
         updates.append("Learned from approved content")
     
     elif action == "rejection":
         # User rejected content - learn what to avoid
         update_from_feedback("engagement_behavior", {
             "action": "rejection"
-        })
+        }, user_id)
         updates.append("Learned from rejected content")
     
     elif action == "edit" and content and original_content:
@@ -46,14 +48,14 @@ def process_explicit_feedback(
             update_from_feedback("tone_style", {
                 "attribute": "sentence_length",
                 "adjustment": -0.05
-            })
+            }, user_id)
             updates.append("Learned: prefer shorter content")
         elif edited_length > original_length * 1.2:
             # User expanded - prefer detailed
             update_from_feedback("tone_style", {
                 "attribute": "sentence_length",
                 "adjustment": 0.05
-            })
+            }, user_id)
             updates.append("Learned: prefer longer content")
         
         # Check for question additions/removals
@@ -63,18 +65,18 @@ def process_explicit_feedback(
             update_from_feedback("tone_style", {
                 "attribute": "question_frequency",
                 "adjustment": 0.05
-            })
+            }, user_id)
             updates.append("Learned: prefer questions")
         elif edited_questions < original_questions:
             update_from_feedback("tone_style", {
                 "attribute": "question_frequency",
                 "adjustment": -0.05
-            })
+            }, user_id)
             updates.append("Learned: prefer fewer questions")
         
         update_from_feedback("engagement_behavior", {
             "action": "edit"
-        })
+        }, user_id)
     
     return {
         "processed": True,
@@ -85,7 +87,8 @@ def process_explicit_feedback(
 
 def process_behavioral_feedback(
     action_type: str,
-    target_content: Optional[Dict[str, Any]] = None
+    target_content: Optional[Dict[str, Any]] = None,
+    user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Process behavioral feedback: likes, replies, follows
@@ -93,6 +96,7 @@ def process_behavioral_feedback(
     Args:
         action_type: 'like', 'reply', 'follow', 'retweet'
         target_content: Content that was engaged with (optional)
+        user_id: User ID for user-specific persona state
     """
     updates = []
     
@@ -103,7 +107,7 @@ def process_behavioral_feedback(
                 update_from_feedback("topic_affinity", {
                     "topic": topic,
                     "adjustment": 0.02  # Small positive adjustment
-                })
+                }, user_id)
             updates.append(f"Learned topic affinity from like")
     
     elif action_type == "reply":
@@ -111,7 +115,7 @@ def process_behavioral_feedback(
         update_from_feedback("engagement_behavior", {
             "attribute": "replies_per_day_baseline",
             "adjustment": 0.1  # Small increase
-        })
+        }, user_id)
         updates.append("Learned engagement behavior from reply")
     
     elif action_type == "follow":
@@ -119,7 +123,7 @@ def process_behavioral_feedback(
         update_from_feedback("engagement_behavior", {
             "attribute": "follow_after_reply_tendency",
             "adjustment": 0.05
-        })
+        }, user_id)
         updates.append("Learned follow tendency")
     
     return {
@@ -132,7 +136,8 @@ def process_behavioral_feedback(
 def process_temporal_feedback(
     action: str,
     time_taken: Optional[float] = None,
-    hesitation_signals: Optional[list] = None
+    hesitation_signals: Optional[list] = None,
+    user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Process temporal feedback: speed of actions, hesitation
@@ -141,6 +146,7 @@ def process_temporal_feedback(
         action: Action taken
         time_taken: Time in seconds
         hesitation_signals: List of hesitation indicators
+        user_id: User ID for user-specific persona state
     """
     updates = []
     
@@ -149,7 +155,7 @@ def process_temporal_feedback(
         update_from_feedback("energy_cadence", {
             "attribute": "fatigue_signal",
             "signal": f"{action}_hesitation"
-        })
+        }, user_id)
         updates.append("Detected engagement fatigue")
     
     if time_taken and time_taken > 300:  # More than 5 minutes
@@ -157,7 +163,7 @@ def process_temporal_feedback(
         update_from_feedback("energy_cadence", {
             "attribute": "fatigue_signal",
             "signal": f"{action}_long_time"
-        })
+        }, user_id)
         updates.append("Detected long processing time")
     
     return {
@@ -169,7 +175,8 @@ def process_temporal_feedback(
 
 def process_outcome_feedback(
     post_id: str,
-    engagement_metrics: Dict[str, Any]
+    engagement_metrics: Dict[str, Any],
+    user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Process outcome feedback: performance vs personal baseline
@@ -177,8 +184,9 @@ def process_outcome_feedback(
     Args:
         post_id: ID of the post
         engagement_metrics: Dict with likes, replies, retweets, etc.
+        user_id: User ID for user-specific persona state
     """
-    state = load_persona_state()
+    state = load_persona_state(user_id)
     updates = []
     
     # This would typically compare against user's historical baseline
@@ -206,11 +214,11 @@ def process_outcome_feedback(
     }
 
 
-def process_daily_summary() -> Dict[str, Any]:
+def process_daily_summary(user_id: Optional[str] = None) -> Dict[str, Any]:
     """Process all feedback from the day and update Persona State"""
     # This would aggregate all feedback from the day
     # For now, just return summary
-    state = load_persona_state()
+    state = load_persona_state(user_id)
     
     return {
         "processed": True,

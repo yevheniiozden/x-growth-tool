@@ -10,35 +10,50 @@ from services.x_api import get_user_timeline, get_user_likes, get_user_replies
 import config
 
 
-def load_activity_log() -> Dict[str, Any]:
+def load_activity_log(user_id: Optional[str] = None) -> Dict[str, Any]:
     """Load activity log from JSON"""
-    if config.ACTIVITY_LOG_FILE.exists():
+    if user_id:
+        from core.auth import get_user_data_dir
+        user_dir = get_user_data_dir(user_id)
+        log_file = user_dir / "activity_log.json"
+    else:
+        log_file = config.ACTIVITY_LOG_FILE
+    
+    if log_file.exists():
         try:
-            with open(config.ACTIVITY_LOG_FILE, 'r', encoding='utf-8') as f:
+            with open(log_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return {"daily_activities": {}}
     return {"daily_activities": {}}
 
 
-def save_activity_log(log: Dict[str, Any]) -> None:
+def save_activity_log(log: Dict[str, Any], user_id: Optional[str] = None) -> None:
     """Save activity log to JSON"""
-    with open(config.ACTIVITY_LOG_FILE, 'w', encoding='utf-8') as f:
+    if user_id:
+        from core.auth import get_user_data_dir
+        user_dir = get_user_data_dir(user_id)
+        log_file = user_dir / "activity_log.json"
+    else:
+        log_file = config.ACTIVITY_LOG_FILE
+    
+    with open(log_file, 'w', encoding='utf-8') as f:
         json.dump(log, f, indent=2, ensure_ascii=False)
 
 
-def get_daily_targets(target_date: Optional[str] = None) -> Dict[str, Any]:
+def get_daily_targets(target_date: Optional[str] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Calculate daily action targets
     
     Args:
         target_date: Date in YYYY-MM-DD format (defaults to today)
+        user_id: User ID for user-specific data
     
     Returns:
         Dictionary with targets and rationale
     """
-    persona_state = load_persona_state()
-    activity_log = load_activity_log()
+    persona_state = load_persona_state(user_id)
+    activity_log = load_activity_log(user_id)
     
     if not target_date:
         target_date = date.today().isoformat()
@@ -123,12 +138,13 @@ def _generate_target_rationale(
     return "; ".join(reasons)
 
 
-def get_prioritized_actions(target_date: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_prioritized_actions(target_date: Optional[str] = None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Get prioritized action list for the day
     
     Args:
         target_date: Date in YYYY-MM-DD format
+        user_id: User ID for user-specific data
     
     Returns:
         List of prioritized actions
@@ -139,7 +155,7 @@ def get_prioritized_actions(target_date: Optional[str] = None) -> List[Dict[str,
     actions = []
     
     # Get scheduled posts for today
-    scheduled_posts = get_scheduled_posts(target_date, target_date)
+    scheduled_posts = get_scheduled_posts(target_date, target_date, user_id)
     for post in scheduled_posts[:3]:  # Top 3
         if post.get("status") in ["draft", "approved"]:
             actions.append({
@@ -170,7 +186,8 @@ def get_prioritized_actions(target_date: Optional[str] = None) -> List[Dict[str,
 def track_action(
     action_type: str,
     action_data: Dict[str, Any],
-    action_date: Optional[str] = None
+    action_date: Optional[str] = None,
+    user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Track a completed action
@@ -179,6 +196,7 @@ def track_action(
         action_type: 'post', 'reply', 'like', 'follow'
         action_data: Action details
         action_date: Date (defaults to today)
+        user_id: User ID for user-specific data
     
     Returns:
         Confirmation dictionary
@@ -186,7 +204,7 @@ def track_action(
     if not action_date:
         action_date = date.today().isoformat()
     
-    activity_log = load_activity_log()
+    activity_log = load_activity_log(user_id)
     
     if "daily_activities" not in activity_log:
         activity_log["daily_activities"] = {}
@@ -212,10 +230,10 @@ def track_action(
         "data": action_data
     })
     
-    save_activity_log(activity_log)
+    save_activity_log(activity_log, user_id)
     
     # Process behavioral feedback
-    process_behavioral_feedback(action_type, action_data)
+    process_behavioral_feedback(action_type, action_data, user_id)
     
     return {
         "tracked": True,
@@ -224,7 +242,7 @@ def track_action(
     }
 
 
-def get_today_progress(target_date: Optional[str] = None) -> Dict[str, Any]:
+def get_today_progress(target_date: Optional[str] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Get progress for today's actions
     
@@ -237,8 +255,8 @@ def get_today_progress(target_date: Optional[str] = None) -> Dict[str, Any]:
     if not target_date:
         target_date = date.today().isoformat()
     
-    targets = get_daily_targets(target_date)
-    activity_log = load_activity_log()
+    targets = get_daily_targets(target_date, user_id)
+    activity_log = load_activity_log(user_id)
     
     today_activity = activity_log.get("daily_activities", {}).get(target_date, {})
     

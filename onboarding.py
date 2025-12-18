@@ -6,12 +6,12 @@ from services.ai_service import client
 import json
 
 
-def run_onboarding_phase1(username: Optional[str] = None) -> Dict[str, Any]:
+def run_onboarding_phase1(username: Optional[str] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Phase 1: Passive Ingestion
     Pull last 30-60 days of activity and extract initial Persona State
     """
-    state = load_persona_state()
+    state = load_persona_state(user_id)
     
     # Get user activity
     timeline = get_user_timeline(username, days_back=60, max_results=100)
@@ -58,7 +58,7 @@ def run_onboarding_phase1(username: Optional[str] = None) -> Dict[str, Any]:
         state["energy_cadence"]["posts_per_day_tolerance"] = max(1, min(5, int(posts_per_day)))
     
     # Save updated state
-    save_persona_state(state)
+    save_persona_state(state, user_id)
     
     return {
         "completed": True,

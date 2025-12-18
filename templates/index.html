@@ -534,18 +534,9 @@
 <body>
     <!-- Onboarding Modal -->
     <div id="onboarding-modal" class="modal-overlay hidden">
-        <div class="modal">
-            <h2>🚀 Welcome to X Growth AI</h2>
-            <p>Let's set up your personal AI brain. Enter your X (Twitter) username to begin onboarding.</p>
-            <input type="text" id="onboarding-username" class="onboarding-input" placeholder="your_username (without @)" autofocus>
-            <button class="btn btn-primary" onclick="startOnboarding()" style="width: 100%;">
-                Start Onboarding
-            </button>
-            <div id="onboarding-progress" class="hidden">
-                <div class="progress-bar-container">
-                    <div id="progress-bar" class="progress-bar-fill" style="width: 0%"></div>
-                </div>
-                <div id="progress-text" class="progress-text">Initializing...</div>
+        <div class="modal" style="max-width: 600px;">
+            <div id="onboarding-content">
+                <!-- Step content will be inserted here -->
             </div>
         </div>
     </div>
@@ -561,9 +552,14 @@
                         <p>Your Personal Distribution Operating System</p>
                     </div>
                 </div>
-                <div class="status-badge" id="status-badge">
-                    <div class="status-dot"></div>
-                    <span id="status-text">Checking connection...</span>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <div class="status-badge" id="status-badge">
+                        <div class="status-dot"></div>
+                        <span id="status-text">Checking connection...</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 0.5rem 1rem; font-size: 14px;">
+                        Logout
+                    </button>
                 </div>
             </div>
             <nav class="nav">
@@ -646,44 +642,225 @@
     </div>
 
     <script>
-        let onboardingComplete = false;
-        let currentUsername = null;
+        let currentUser = null;
+        let onboardingStep = 1;
 
         // Check authentication and onboarding status on load
         async function checkAuthStatus() {
             try {
-                // Check if persona state exists and has been initialized
-                const personaResponse = await fetch('/api/persona/state');
-                const personaData = await personaResponse.json();
-                
-                // Check if onboarding has been run (has learning history)
-                const hasOnboarding = personaData.learning_history && 
-                                     (personaData.learning_history.total_approvals > 0 || 
-                                      personaData.learning_history.last_updated);
-                
-                // Check X API connection
-                const xUserResponse = await fetch('/api/x/user');
-                const xUserData = await xUserResponse.json();
-                
-                if (xUserData.id || xUserData.username) {
-                    updateStatus('Connected', 'success');
-                    currentUsername = xUserData.username;
-                } else {
-                    updateStatus('Not Connected', 'warning');
+                // Check if user is authenticated
+                const userResponse = await fetch('/api/auth/me', {
+                    headers: getAuthHeaders()
+                });
+                if (!userResponse.ok) {
+                    window.location.href = '/auth';
+                    return;
                 }
                 
-                // Show onboarding if not completed
-                if (!hasOnboarding) {
-                    showOnboardingModal();
+                currentUser = await userResponse.json();
+                
+                // Store user_id in localStorage for easy access
+                if (currentUser.user_id) {
+                    localStorage.setItem('user_id', currentUser.user_id);
+                }
+                
+                // Check onboarding status
+                const onboardingResponse = await fetch('/api/onboarding/step', {
+                    headers: getAuthHeaders()
+                });
+                const onboardingData = await onboardingResponse.json();
+                
+                onboardingStep = onboardingData.step;
+                
+                // Update status
+                if (currentUser.x_connected) {
+                    updateStatus('X Connected', 'success');
                 } else {
-                    onboardingComplete = true;
+                    updateStatus('X Not Connected', 'warning');
+                }
+                
+                // Show onboarding if not complete
+                if (onboardingData.step !== 'complete' && !currentUser.onboarding_complete) {
+                    showOnboardingStep(onboardingData.step);
+                } else {
                     loadDashboard();
                 }
             } catch (error) {
                 console.error('Auth check error:', error);
-                updateStatus('Connection Error', 'error');
-                // Still show onboarding to allow user to proceed
-                showOnboardingModal();
+                if (error.message.includes('401') || error.message.includes('Not authenticated')) {
+                    window.location.href = '/auth';
+                } else {
+                    updateStatus('Connection Error', 'error');
+                    showOnboardingStep(1);
+                }
+            }
+        }
+        
+        function showOnboardingStep(step) {
+            const modal = document.getElementById('onboarding-modal');
+            const content = document.getElementById('onboarding-content');
+            
+            modal.classList.remove('hidden');
+            
+            if (step === 1 || step === '1') {
+                // Step 1: Connect X Account
+                content.innerHTML = `
+                    <h2>🔗 Step 1: Connect Your X Account</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                        To get started, we need to connect to your X (Twitter) account. 
+                        This allows us to analyze your activity and understand your unique voice.
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label">Your X Username</label>
+                        <input type="text" id="x-username-input" class="form-input" 
+                               placeholder="your_username (without @)" autofocus>
+                        <p style="color: var(--text-muted); font-size: 12px; margin-top: 0.5rem;">
+                            Enter your X username without the @ symbol
+                        </p>
+                    </div>
+                    <button class="btn btn-primary" onclick="connectXAccount()" style="width: 100%;">
+                        Connect X Account
+                    </button>
+                    <div id="step1-error" style="margin-top: 1rem;"></div>
+                `;
+            } else if (step === 2 || step === '2') {
+                // Step 2: Analyze Activity
+                content.innerHTML = `
+                    <h2>📊 Step 2: Analyze Your Activity</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                        Great! Your X account is connected. Now we'll analyze your posts, likes, and engagement 
+                        to understand your unique voice and preferences.
+                    </p>
+                    <div id="step2-progress" class="hidden">
+                        <div class="progress-bar-container">
+                            <div id="step2-progress-bar" class="progress-bar-fill" style="width: 0%"></div>
+                        </div>
+                        <div id="step2-progress-text" class="progress-text">Starting analysis...</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="analyzePersona()" style="width: 100%;" id="analyze-btn">
+                        Start Analysis
+                    </button>
+                    <div id="step2-error" style="margin-top: 1rem;"></div>
+                `;
+            } else if (step === 3 || step === '3') {
+                // Step 3: Complete
+                content.innerHTML = `
+                    <h2>🎉 Step 3: You're All Set!</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                        Your persona has been created! Your AI brain is now learning your unique voice, 
+                        topics, and engagement style.
+                    </p>
+                    <div class="alert alert-success" style="margin-bottom: 2rem;">
+                        ✅ Persona analysis complete<br>
+                        ✅ Your AI brain is ready<br>
+                        ✅ You can now use all features
+                    </div>
+                    <button class="btn btn-primary" onclick="completeOnboarding()" style="width: 100%;">
+                        Get Started
+                    </button>
+                `;
+            }
+        }
+        
+        async function connectXAccount() {
+            const username = document.getElementById('x-username-input').value.trim().replace('@', '');
+            const errorDiv = document.getElementById('step1-error');
+            
+            if (!username) {
+                errorDiv.innerHTML = '<div class="alert alert-error">Please enter your X username</div>';
+                return;
+            }
+            
+            errorDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/onboarding/connect-x', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ x_username: username })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentUser.x_connected = true;
+                    currentUser.x_username = username;
+                    updateStatus('X Connected', 'success');
+                    showOnboardingStep(2);
+                } else {
+                    errorDiv.innerHTML = `<div class="alert alert-error">${data.error || 'Connection failed'}</div>`;
+                }
+            } catch (error) {
+                errorDiv.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function analyzePersona() {
+            const progressDiv = document.getElementById('step2-progress');
+            const progressBar = document.getElementById('step2-progress-bar');
+            const progressText = document.getElementById('step2-progress-text');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            const errorDiv = document.getElementById('step2-error');
+            
+            progressDiv.classList.remove('hidden');
+            analyzeBtn.disabled = true;
+            analyzeBtn.textContent = 'Analyzing...';
+            errorDiv.innerHTML = '';
+            
+            progressBar.style.width = '20%';
+            progressText.textContent = 'Fetching your posts...';
+            
+            try {
+                progressBar.style.width = '40%';
+                progressText.textContent = 'Analyzing your likes...';
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                progressBar.style.width = '60%';
+                progressText.textContent = 'Understanding your engagement style...';
+                
+                const response = await fetch('/api/onboarding/analyze', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    progressBar.style.width = '80%';
+                    progressText.textContent = 'Creating your persona...';
+                    
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    progressBar.style.width = '100%';
+                    progressText.textContent = 'Analysis complete!';
+                    
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    showOnboardingStep(3);
+                } else {
+                    errorDiv.innerHTML = `<div class="alert alert-error">${data.error || 'Analysis failed'}</div>`;
+                    analyzeBtn.disabled = false;
+                    analyzeBtn.textContent = 'Start Analysis';
+                }
+            } catch (error) {
+                errorDiv.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = 'Start Analysis';
+            }
+        }
+        
+        async function completeOnboarding() {
+            try {
+                await fetch('/api/onboarding/complete', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                
+                hideOnboardingModal();
+                loadDashboard();
+            } catch (error) {
+                alert('Error completing onboarding: ' + error.message);
             }
         }
 
@@ -702,67 +879,9 @@
             }
         }
 
-        function showOnboardingModal() {
-            document.getElementById('onboarding-modal').classList.remove('hidden');
-        }
-
         function hideOnboardingModal() {
             document.getElementById('onboarding-modal').classList.add('hidden');
         }
-
-        async function startOnboarding() {
-            const username = document.getElementById('onboarding-username').value.trim();
-            if (!username) {
-                alert('Please enter your X username');
-                return;
-            }
-            
-            currentUsername = username;
-            const progressDiv = document.getElementById('onboarding-progress');
-            const progressBar = document.getElementById('progress-bar');
-            const progressText = document.getElementById('progress-text');
-            
-            progressDiv.classList.remove('hidden');
-            progressBar.style.width = '20%';
-            progressText.textContent = 'Connecting to X API...';
-            
-            try {
-                progressBar.style.width = '40%';
-                progressText.textContent = 'Fetching your activity...';
-                
-                const response = await fetch(`/api/onboarding/phase1?username=${encodeURIComponent(username)}`);
-                const data = await response.json();
-                
-                if (data.completed) {
-                    progressBar.style.width = '80%';
-                    progressText.textContent = 'Analyzing your persona...';
-                    
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    
-                    progressBar.style.width = '100%';
-                    progressText.textContent = 'Onboarding complete!';
-                    
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    
-                    onboardingComplete = true;
-                    hideOnboardingModal();
-                    updateStatus('Connected', 'success');
-                    loadDashboard();
-                } else {
-                    throw new Error('Onboarding failed');
-                }
-            } catch (error) {
-                progressText.textContent = `Error: ${error.message}`;
-                alert('Onboarding failed. Please check your X API connection and try again.');
-            }
-        }
-
-        // Allow Enter key to start onboarding
-        document.getElementById('onboarding-username').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                startOnboarding();
-            }
-        });
 
         // Show/hide sections
         function showSection(sectionId) {
@@ -784,6 +903,15 @@
             }
         }
 
+        // Helper to get auth headers
+        function getAuthHeaders() {
+            const token = localStorage.getItem('session_token');
+            return {
+                'Content-Type': 'application/json',
+                'X-Session-Token': token || ''
+            };
+        }
+
         // Load dashboard
         async function loadDashboard() {
             const content = document.getElementById('dashboard-content');
@@ -791,9 +919,9 @@
             
             try {
                 const [targetsRes, progressRes, actionsRes] = await Promise.all([
-                    fetch('/api/daily-actions/targets'),
-                    fetch('/api/daily-actions/progress'),
-                    fetch('/api/daily-actions/prioritized')
+                    fetch('/api/daily-actions/targets', { headers: getAuthHeaders() }),
+                    fetch('/api/daily-actions/progress', { headers: getAuthHeaders() }),
+                    fetch('/api/daily-actions/prioritized', { headers: getAuthHeaders() })
                 ]);
                 
                 const targets = await targetsRes.json();
@@ -861,7 +989,9 @@
             resultsDiv.innerHTML = '<div class="spinner"></div>';
             
             try {
-                const response = await fetch(`/api/content-intelligence/analyze/${listId}`);
+                const response = await fetch(`/api/content-intelligence/analyze/${listId}`, {
+                    headers: getAuthHeaders()
+                });
                 const data = await response.json();
                 
                 if (data.error) {
@@ -886,7 +1016,10 @@
             resultsDiv.innerHTML = '<div class="spinner"></div>';
             
             try {
-                const response = await fetch('/api/content-machine/generate', { method: 'POST' });
+                const response = await fetch('/api/content-machine/generate', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
                 const data = await response.json();
                 
                 if (data.error) {
@@ -904,7 +1037,9 @@
         // Load scheduled posts
         async function loadScheduledPosts() {
             try {
-                const response = await fetch('/api/content-machine/schedule');
+                const response = await fetch('/api/content-machine/schedule', {
+                    headers: getAuthHeaders()
+                });
                 const data = await response.json();
                 
                 let html = '<h3 style="margin-bottom: 1rem;">Scheduled Posts</h3>';
@@ -956,7 +1091,7 @@
             try {
                 const response = await fetch('/api/reply-guy/check', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({ list_ids: listIds })
                 });
                 const data = await response.json();
@@ -971,7 +1106,9 @@
         // Load pending replies
         async function loadPendingReplies() {
             try {
-                const response = await fetch('/api/reply-guy/pending');
+                const response = await fetch('/api/reply-guy/pending', {
+                    headers: getAuthHeaders()
+                });
                 const replies = await response.json();
                 
                 let html = '<h3 style="margin-bottom: 1rem;">Pending Reply Opportunities</h3>';
@@ -1023,7 +1160,9 @@
         // Load persona
         async function loadPersona() {
             try {
-                const response = await fetch('/api/persona/explanation');
+                const response = await fetch('/api/persona/explanation', {
+                    headers: getAuthHeaders()
+                });
                 const text = await response.text();
                 document.getElementById('persona-display').textContent = text;
             } catch (error) {
@@ -1039,7 +1178,7 @@
             try {
                 await fetch(`/api/content-machine/posts/${postId}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({ content: newContent })
                 });
                 loadScheduledPosts();
@@ -1050,7 +1189,10 @@
 
         async function approvePost(postId) {
             try {
-                await fetch(`/api/content-machine/posts/${postId}/approve`, { method: 'POST' });
+                await fetch(`/api/content-machine/posts/${postId}/approve`, {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
                 loadScheduledPosts();
                 loadDashboard();
             } catch (error) {
@@ -1062,7 +1204,10 @@
             if (!confirm('Delete this post?')) return;
             
             try {
-                await fetch(`/api/content-machine/posts/${postId}`, { method: 'DELETE' });
+                await fetch(`/api/content-machine/posts/${postId}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
                 loadScheduledPosts();
             } catch (error) {
                 alert('Error deleting post: ' + error.message);
@@ -1074,12 +1219,39 @@
             try {
                 await fetch('/api/daily-actions/track', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({ action_type: actionType, action_data: { id: actionId } })
                 });
                 loadDashboard();
             } catch (error) {
                 alert('Error tracking action: ' + error.message);
+            }
+        }
+
+        // Allow Enter key in X username input
+        document.addEventListener('keypress', function(e) {
+            if (e.target && e.target.id === 'x-username-input' && e.key === 'Enter') {
+                connectXAccount();
+            }
+        });
+
+        // Logout function
+        async function logout() {
+            if (!confirm('Are you sure you want to logout?')) return;
+            
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                localStorage.removeItem('session_token');
+                localStorage.removeItem('user_id');
+                window.location.href = '/auth';
+            } catch (error) {
+                console.error('Logout error:', error);
+                localStorage.removeItem('session_token');
+                localStorage.removeItem('user_id');
+                window.location.href = '/auth';
             }
         }
 

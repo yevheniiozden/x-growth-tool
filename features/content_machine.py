@@ -9,27 +9,42 @@ from services.ai_service import generate_posts, explain_persona_alignment
 import config
 
 
-def load_content_schedule() -> Dict[str, Any]:
+def load_content_schedule(user_id: Optional[str] = None) -> Dict[str, Any]:
     """Load content schedule from JSON"""
-    if config.CONTENT_SCHEDULE_FILE.exists():
+    if user_id:
+        from core.auth import get_user_data_dir
+        user_dir = get_user_data_dir(user_id)
+        schedule_file = user_dir / "content_schedule.json"
+    else:
+        schedule_file = config.CONTENT_SCHEDULE_FILE
+    
+    if schedule_file.exists():
         try:
-            with open(config.CONTENT_SCHEDULE_FILE, 'r', encoding='utf-8') as f:
+            with open(schedule_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return {"posts": []}
     return {"posts": []}
 
 
-def save_content_schedule(schedule: Dict[str, Any]) -> None:
+def save_content_schedule(schedule: Dict[str, Any], user_id: Optional[str] = None) -> None:
     """Save content schedule to JSON"""
-    with open(config.CONTENT_SCHEDULE_FILE, 'w', encoding='utf-8') as f:
+    if user_id:
+        from core.auth import get_user_data_dir
+        user_dir = get_user_data_dir(user_id)
+        schedule_file = user_dir / "content_schedule.json"
+    else:
+        schedule_file = config.CONTENT_SCHEDULE_FILE
+    
+    with open(schedule_file, 'w', encoding='utf-8') as f:
         json.dump(schedule, f, indent=2, ensure_ascii=False)
 
 
 def generate_monthly_posts(
     count: int = 30,
     external_signals: Optional[str] = None,
-    start_date: Optional[str] = None
+    start_date: Optional[str] = None,
+    user_id: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Generate posts for a month
@@ -38,14 +53,15 @@ def generate_monthly_posts(
         count: Number of posts to generate
         external_signals: Analysis from Feature 1
         start_date: Start date (YYYY-MM-DD), defaults to today
+        user_id: User ID for user-specific persona state
     
     Returns:
         List of post dictionaries with scheduling info
     """
-    persona_state = load_persona_state()
+    persona_state = load_persona_state(user_id)
     
     # Generate posts using AI
-    posts = generate_posts(count, external_signals)
+    posts = generate_posts(count, external_signals, user_id)
     
     # Add scheduling information
     if not start_date:
@@ -96,16 +112,17 @@ def generate_monthly_posts(
     return scheduled_posts
 
 
-def add_posts_to_schedule(posts: List[Dict[str, Any]]) -> None:
+def add_posts_to_schedule(posts: List[Dict[str, Any]], user_id: Optional[str] = None) -> None:
     """Add generated posts to schedule"""
-    schedule = load_content_schedule()
+    schedule = load_content_schedule(user_id)
     schedule["posts"].extend(posts)
-    save_content_schedule(schedule)
+    save_content_schedule(schedule, user_id)
 
 
 def get_scheduled_posts(
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    end_date: Optional[str] = None,
+    user_id: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Get scheduled posts within date range
@@ -117,7 +134,7 @@ def get_scheduled_posts(
     Returns:
         List of scheduled posts
     """
-    schedule = load_content_schedule()
+    schedule = load_content_schedule(user_id)
     all_posts = schedule.get("posts", [])
     
     if not start_date and not end_date:
@@ -144,7 +161,8 @@ def get_scheduled_posts(
 
 def update_post(
     post_id: str,
-    updates: Dict[str, Any]
+    updates: Dict[str, Any],
+    user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Update a scheduled post
@@ -152,11 +170,12 @@ def update_post(
     Args:
         post_id: Post ID
         updates: Dictionary of fields to update
+        user_id: User ID
     
     Returns:
         Updated post dictionary
     """
-    schedule = load_content_schedule()
+    schedule = load_content_schedule(user_id)
     posts = schedule.get("posts", [])
     
     for i, post in enumerate(posts):
@@ -164,49 +183,49 @@ def update_post(
             # Track if content was edited for learning
             if "content" in updates and updates["content"] != post.get("content"):
                 original_content = post.get("content", "")
-                process_explicit_feedback("edit", updates["content"], original_content)
+                process_explicit_feedback("edit", updates["content"], original_content, user_id)
             
             # Update post
             posts[i].update(updates)
-            save_content_schedule(schedule)
+            save_content_schedule(schedule, user_id)
             return posts[i]
     
     return {"error": "Post not found"}
 
 
-def delete_post(post_id: str) -> Dict[str, Any]:
+def delete_post(post_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     """Delete a scheduled post"""
-    schedule = load_content_schedule()
+    schedule = load_content_schedule(user_id)
     posts = schedule.get("posts", [])
     
-    for i, post in enumerate(posts):
-        if post.get("id") == post_id:
-            deleted = posts.pop(i)
-            save_content_schedule(schedule)
-            
-            # Learn from rejection
-            process_explicit_feedback("rejection", post.get("content"))
-            
-            return {"deleted": deleted}
+        for i, post in enumerate(posts):
+            if post.get("id") == post_id:
+                deleted = posts.pop(i)
+                save_content_schedule(schedule, user_id)
+                
+                # Learn from rejection
+                process_explicit_feedback("rejection", post.get("content"), None, user_id)
+                
+                return {"deleted": deleted}
     
     return {"error": "Post not found"}
 
 
-def approve_post(post_id: str) -> Dict[str, Any]:
+def approve_post(post_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     """Approve a post (mark as ready to post)"""
-    result = update_post(post_id, {"status": "approved"})
+    result = update_post(post_id, {"status": "approved"}, user_id)
     
     if "error" not in result:
         # Learn from approval
-        process_explicit_feedback("approval", result.get("content"))
-        update_from_feedback("engagement_behavior", {"action": "approval"})
+        process_explicit_feedback("approval", result.get("content"), None, user_id)
+        update_from_feedback("engagement_behavior", {"action": "approval"}, user_id)
     
     return result
 
 
-def get_post_rationale(post_id: str) -> str:
+def get_post_rationale(post_id: str, user_id: Optional[str] = None) -> str:
     """Get explanation of why a post fits the persona"""
-    schedule = load_content_schedule()
+    schedule = load_content_schedule(user_id)
     posts = schedule.get("posts", [])
     
     for post in posts:
@@ -216,8 +235,8 @@ def get_post_rationale(post_id: str) -> str:
             
             # Generate enhanced rationale if needed
             if not rationale or rationale == "Generated based on persona profile":
-                rationale = explain_persona_alignment(content, "post")
-                update_post(post_id, {"rationale": rationale})
+                rationale = explain_persona_alignment(content, "post", user_id)
+                update_post(post_id, {"rationale": rationale}, user_id)
             
             return rationale
     

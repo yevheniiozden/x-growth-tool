@@ -65,7 +65,7 @@ def monitor_list_accounts(list_id: str, hours_back: int = 24) -> List[Dict[str, 
     
     for post in recent_posts:
         # Generate reply suggestions
-        suggestions = generate_reply_suggestions(post, count=3)
+        suggestions = generate_reply_suggestions(post, count=3, user_id=None)  # TODO: Pass user_id
         
         # Filter through persona (risk tolerance, tone)
         filtered_suggestions = _filter_by_persona(suggestions, persona_state)

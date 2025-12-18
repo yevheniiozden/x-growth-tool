@@ -12,9 +12,9 @@ else:
     client = None
 
 
-def _get_persona_context() -> str:
+def _get_persona_context(user_id: Optional[str] = None) -> str:
     """Get Persona State as context string for prompts"""
-    state = load_persona_state()
+    state = load_persona_state(user_id)
     
     context = f"""User's Persona Profile:
 
@@ -47,7 +47,7 @@ RISK SENSITIVITY:
     return context
 
 
-def analyze_content_patterns(posts: List[Dict[str, Any]]) -> str:
+def analyze_content_patterns(posts: List[Dict[str, Any]], user_id: Optional[str] = None) -> str:
     """
     Analyze posts from X Lists to extract patterns
     
@@ -66,7 +66,7 @@ def analyze_content_patterns(posts: List[Dict[str, Any]]) -> str:
         for post in posts[:50]  # Limit to 50 posts for token efficiency
     ])
     
-    persona_context = _get_persona_context()
+    persona_context = _get_persona_context(user_id)
     
     prompt = f"""{persona_context}
 
@@ -101,7 +101,7 @@ Focus on insights that would help generate content that matches the user's perso
         return f"Error analyzing content: {str(e)}"
 
 
-def generate_posts(count: int = 30, external_signals: Optional[str] = None) -> List[Dict[str, Any]]:
+def generate_posts(count: int = 30, external_signals: Optional[str] = None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Generate persona-aligned post ideas
     
@@ -115,7 +115,7 @@ def generate_posts(count: int = 30, external_signals: Optional[str] = None) -> L
     if not client:
         return [{"error": "OpenAI API key not configured"}]
     
-    persona_context = _get_persona_context()
+    persona_context = _get_persona_context(user_id)
     
     signals_context = ""
     if external_signals:
@@ -201,7 +201,8 @@ Generate diverse post types: insights, opinions, relatable content, questions, c
 
 def generate_reply_suggestions(
     original_post: Dict[str, Any],
-    count: int = 3
+    count: int = 3,
+    user_id: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Generate persona-aligned reply suggestions
@@ -216,7 +217,7 @@ def generate_reply_suggestions(
     if not client:
         return [{"error": "OpenAI API key not configured"}]
     
-    persona_context = _get_persona_context()
+    persona_context = _get_persona_context(user_id)
     
     prompt = f"""{persona_context}
 
@@ -298,7 +299,7 @@ Format as JSON array:
         return [{"error": f"Error generating replies: {str(e)}"}]
 
 
-def explain_persona_alignment(content: str, content_type: str = "post") -> str:
+def explain_persona_alignment(content: str, content_type: str = "post", user_id: Optional[str] = None) -> str:
     """
     Generate explanation of why content aligns with persona
     
@@ -312,7 +313,7 @@ def explain_persona_alignment(content: str, content_type: str = "post") -> str:
     if not client:
         return "OpenAI API key not configured"
     
-    persona_context = _get_persona_context()
+    persona_context = _get_persona_context(user_id)
     
     prompt = f"""{persona_context}
 

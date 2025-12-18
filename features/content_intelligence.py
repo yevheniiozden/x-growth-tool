@@ -8,7 +8,8 @@ from core.persona_state import load_persona_state
 def analyze_list_content(
     list_id: str,
     days_back: int = 30,
-    max_posts: int = 200
+    max_posts: int = 200,
+    user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Analyze content from an X List
@@ -17,12 +18,13 @@ def analyze_list_content(
         list_id: X List ID
         days_back: How many days back to analyze
         max_posts: Maximum posts to analyze
+        user_id: User ID for user-specific persona state
     
     Returns:
         Analysis report dictionary
     """
     # Load Persona State for filtering
-    persona_state = load_persona_state()
+    persona_state = load_persona_state(user_id)
     
     # Fetch posts from list
     posts = get_list_timeline(list_id, days_back, max_posts)
@@ -37,7 +39,7 @@ def analyze_list_content(
     members = get_list_members(list_id)
     
     # Analyze with AI (persona-aware)
-    analysis_text = analyze_content_patterns(posts)
+    analysis_text = analyze_content_patterns(posts, user_id)
     
     # Extract basic stats
     total_posts = len(posts)
