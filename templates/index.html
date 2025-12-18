@@ -1266,10 +1266,12 @@
             
             try {
                 // First analyze keywords with AI
+                // Convert keywords array to comma-separated string for analysis endpoint
+                const keywordsString = keywords.join(', ');
                 const analyzeResponse = await fetch('/api/onboarding/analyze-keywords', {
                     method: 'POST',
                     headers: getAuthHeaders(),
-                    body: JSON.stringify({ keywords: input })
+                    body: JSON.stringify({ keywords: keywordsString })
                 });
                 
                 const analyzeData = await analyzeResponse.json();
@@ -1282,23 +1284,18 @@
                 }
                 
                 // Show analysis results if available
-                if (analyzeData.analysis && analyzeData.analysis.summary) {
-                    const analysisDiv = document.createElement('div');
-                    analysisDiv.className = 'alert alert-info';
-                    analysisDiv.style.marginTop = '1rem';
-                    analysisDiv.innerHTML = `
-                        <div style="margin-bottom: 0.5rem;"><strong>AI Analysis:</strong></div>
-                        <div>${analyzeData.analysis.summary}</div>
-                        ${analyzeData.suggestions && analyzeData.suggestions.length > 0 ? `
-                        <div style="margin-top: 0.5rem;">
-                            <strong>Suggestions:</strong>
-                            <ul style="margin-top: 0.25rem; padding-left: 1.5rem;">
-                                ${analyzeData.suggestions.map(s => `<li>${s}</li>`).join('')}
-                            </ul>
-                        </div>
-                        ` : ''}
-                    `;
-                    errorDiv.appendChild(analysisDiv);
+                const analysisResultsDiv = document.getElementById('keywords-analysis-results');
+                if (analysisResultsDiv) {
+                    if (analyzeData.ai_analysis) {
+                        analysisResultsDiv.innerHTML = `
+                            <div class="alert alert-info" style="margin-top: 1rem;">
+                                <div style="margin-bottom: 0.5rem;"><strong>AI Analysis:</strong></div>
+                                <div>${analyzeData.ai_analysis}</div>
+                            </div>
+                        `;
+                    } else {
+                        analysisResultsDiv.innerHTML = '';
+                    }
                 }
                 
                 // Save keywords
