@@ -1,3 +1,4 @@
+
 """Account Discovery Feature - Find relevant accounts based on keywords and criteria"""
 from typing import List, Dict, Any, Optional
 from services.x_api import client
@@ -264,7 +265,8 @@ def get_posts_for_onboarding(
     keywords: List[str],
     keyword_relevance: Dict[str, float],
     post_type: str = 'like',  # 'like', 'reply', 'engage'
-    max_results: int = 20
+    max_results: int = 20,
+    fast_mode: bool = False  # Skip AI expansion for speed
 ) -> List[Dict[str, Any]]:
     """
     Get posts for onboarding (likes, replies, engagement)
@@ -285,8 +287,7 @@ def get_posts_for_onboarding(
     all_tweets = []  # Collect tweets from all queries
     
     try:
-        # OPTIMIZATION: Use fallback queries immediately for speed, AI enhancement is optional
-        # Generate simple, fast queries first
+        # Generate simple, fast queries first (always fast)
         fallback_queries = []
         if len(keywords) <= 5:
             fallback_queries.append(" OR ".join(keywords) + " -is:retweet -is:reply lang:en")
@@ -297,30 +298,32 @@ def get_posts_for_onboarding(
         if len(keywords) >= 1:
             fallback_queries.append(f"{keywords[0]} -is:retweet -is:reply lang:en")
         
-        # Start with fallback queries (fast, non-blocking)
+        # Start with fallback queries (fast, immediate)
         search_queries = fallback_queries[:3]
         
-        # Try AI enhancement in parallel (non-blocking, optional)
-        # Only expand top 3 keywords for speed
-        keywords_to_expand = keywords[:3] if len(keywords) > 3 else keywords
-        
-        try:
-            print(f"Expanding {len(keywords_to_expand)} keywords semantically (optional enhancement)...")
-            expansion = expand_keywords_semantically(keywords_to_expand)
-            context = expansion.get("context", "")
-            
-            print(f"Generating AI-optimized search queries...")
-            ai_queries = generate_search_queries(keywords, context)
-            if ai_queries and len(ai_queries) > 0:
-                # Prepend AI queries (they're better), but keep fallback as backup
-                search_queries = ai_queries[:3] + fallback_queries[:2]
-                search_queries = search_queries[:5]  # Limit to 5 total
-                print(f"Generated {len(ai_queries)} AI queries, using {len(search_queries)} total")
-            else:
-                print("AI queries empty, using fallback queries")
-        except Exception as e:
-            print(f"AI enhancement failed (non-critical), using fallback queries: {e}")
-            # Continue with fallback queries - they work fine
+        # AI enhancement is optional and only if not in fast mode
+        if not fast_mode:
+            try:
+                # Only expand top 3 keywords for speed
+                keywords_to_expand = keywords[:3] if len(keywords) > 3 else keywords
+                print(f"Expanding {len(keywords_to_expand)} keywords semantically (optional enhancement)...")
+                expansion = expand_keywords_semantically(keywords_to_expand)
+                context = expansion.get("context", "")
+                
+                print(f"Generating AI-optimized search queries...")
+                ai_queries = generate_search_queries(keywords, context)
+                if ai_queries and len(ai_queries) > 0:
+                    # Prepend AI queries (they're better), but keep fallback as backup
+                    search_queries = ai_queries[:3] + fallback_queries[:2]
+                    search_queries = search_queries[:5]  # Limit to 5 total
+                    print(f"Generated {len(ai_queries)} AI queries, using {len(search_queries)} total")
+                else:
+                    print("AI queries empty, using fallback queries")
+            except Exception as e:
+                print(f"AI enhancement failed (non-critical), using fallback queries: {e}")
+                # Continue with fallback queries - they work fine
+        else:
+            print("Fast mode: skipping AI expansion for immediate results")
         
         # Step 2: Execute multiple search queries and combine results
         for i, query in enumerate(search_queries):

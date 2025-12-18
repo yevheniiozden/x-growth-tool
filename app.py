@@ -1125,7 +1125,7 @@ async def health_check_keys():
     }
     
     return {
-        "openai": openai_quick_check,
+        "openai": openai_status,
         "x_api": x_api_status,
         "overall": {
             "openai_available": openai_available,

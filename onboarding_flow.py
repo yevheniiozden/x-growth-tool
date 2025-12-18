@@ -333,17 +333,17 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
             }
         
         # Background task completed but no posts - try quick fetch with simpler queries
-        print(f"No cached posts found for phase {phase}, attempting quick fetch...")
+        print(f"No cached posts found for phase {phase}, attempting quick fetch (fast mode)...")
         try:
-            # Use simpler, faster queries (no AI expansion to speed up)
+            # Use fast mode - skip AI expansion entirely for immediate results
             from features.account_discovery import get_posts_for_onboarding
             
             if phase == 1:
-                posts = get_posts_for_onboarding(keywords, keyword_relevance, 'like', 20)
+                posts = get_posts_for_onboarding(keywords, keyword_relevance, 'like', 20, fast_mode=True)
             elif phase == 2:
-                posts = get_posts_for_onboarding(keywords, keyword_relevance, 'reply', 10)
+                posts = get_posts_for_onboarding(keywords, keyword_relevance, 'reply', 10, fast_mode=True)
             elif phase == 3:
-                posts = get_posts_for_onboarding(keywords, keyword_relevance, 'engage', 20)
+                posts = get_posts_for_onboarding(keywords, keyword_relevance, 'engage', 20, fast_mode=True)
             
             print(f"Quick fetch returned {len(posts)} posts for phase {phase}")
             
