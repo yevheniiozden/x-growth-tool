@@ -2617,11 +2617,19 @@
                         
                         // Try to embed post using oEmbed if URL is available
                         if (data.post.url) {
+                            // Show loading state
+                            postContentElement.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading post...</div>';
+                            
                             // Fetch oEmbed HTML
                             fetch(`/api/onboarding/oembed?url=${encodeURIComponent(data.post.url)}`, {
                                 headers: getAuthHeaders()
                             })
-                            .then(response => response.json())
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error(`HTTP ${response.status}`);
+                                }
+                                return response.json();
+                            })
                             .then(oembedData => {
                                 if (oembedData.success && oembedData.html) {
                                     // Use embedded post - wrap in container for proper display
@@ -2633,20 +2641,46 @@
                                         </div>
                                     `;
                                     
-                                    // Function to load Twitter widgets
+                                    // Function to load Twitter widgets with retry
+                                    let retryCount = 0;
+                                    const maxRetries = 15;
                                     const loadTwitterWidgets = () => {
                                         if (window.twttr && window.twttr.widgets) {
                                             // Find the blockquote in the container
                                             const blockquote = postContentElement.querySelector('blockquote.twitter-tweet');
                                             if (blockquote) {
-                                                window.twttr.widgets.load(blockquote);
+                                                window.twttr.widgets.load(blockquote).then(() => {
+                                                    console.log('Twitter widget loaded successfully');
+                                                }).catch(err => {
+                                                    console.error('Error loading widget:', err);
+                                                    if (retryCount < maxRetries) {
+                                                        retryCount++;
+                                                        setTimeout(loadTwitterWidgets, 800);
+                                                    } else {
+                                                        console.warn('Max retries reached, using custom post');
+                                                        renderCustomPost(postContentElement, data.post);
+                                                    }
+                                                });
                                             } else {
-                                                // If no blockquote found, load the entire container
-                                                window.twttr.widgets.load(postContentElement);
+                                                // If no blockquote found, try loading entire container
+                                                window.twttr.widgets.load(postContentElement).catch(() => {
+                                                    if (retryCount < maxRetries) {
+                                                        retryCount++;
+                                                        setTimeout(loadTwitterWidgets, 800);
+                                                    } else {
+                                                        renderCustomPost(postContentElement, data.post);
+                                                    }
+                                                });
                                             }
                                         } else {
                                             // Wait a bit and try again
-                                            setTimeout(loadTwitterWidgets, 200);
+                                            if (retryCount < maxRetries) {
+                                                retryCount++;
+                                                setTimeout(loadTwitterWidgets, 400);
+                                            } else {
+                                                console.error('Twitter widgets not available after retries');
+                                                renderCustomPost(postContentElement, data.post);
+                                            }
                                         }
                                     };
                                     
@@ -2661,27 +2695,33 @@
                                         
                                         // Wait for script to load, then initialize
                                         script.onload = function() {
-                                            setTimeout(loadTwitterWidgets, 1000);
+                                            // Wait for twttr to be ready
+                                            if (window.twttr && window.twttr.ready) {
+                                                window.twttr.ready(loadTwitterWidgets);
+                                            } else {
+                                                setTimeout(loadTwitterWidgets, 2000);
+                                            }
                                         };
                                         script.onerror = function() {
-                                            console.error('Failed to load Twitter widgets');
+                                            console.error('Failed to load Twitter widgets script');
                                             renderCustomPost(postContentElement, data.post);
                                         };
                                     } else {
-                                        // Script already loaded, initialize immediately
+                                        // Script already loaded, initialize
                                         if (window.twttr && window.twttr.ready) {
                                             window.twttr.ready(loadTwitterWidgets);
                                         } else {
-                                            setTimeout(loadTwitterWidgets, 500);
+                                            setTimeout(loadTwitterWidgets, 1000);
                                         }
                                     }
                                 } else {
                                     // Fallback to custom design
+                                    console.warn('oEmbed failed, using custom post:', oembedData.error);
                                     renderCustomPost(postContentElement, data.post);
                                 }
                             })
                             .catch(error => {
-                                console.error('oEmbed error:', error);
+                                console.error('oEmbed fetch error:', error);
                                 renderCustomPost(postContentElement, data.post);
                             });
                         } else {
