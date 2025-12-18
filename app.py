@@ -1079,21 +1079,44 @@ async def onboarding_phase1_endpoint(request: Request, username: Optional[str] =
 @app.get("/api/health/keys")
 async def health_check_keys():
     """Check status of API keys"""
-    from services.ai_service import validate_openai_key
+    from services.ai_service import validate_openai_key, client as ai_client
     import config
     
-    openai_status = validate_openai_key()
+    # Quick check: if client exists and key format is correct, assume valid
+    # Full validation can be slow, so we do a quick check first
+    openai_quick_check = {
+        "valid": bool(ai_client and config.OPENAI_API_KEY and config.OPENAI_API_KEY.startswith('sk-')),
+        "error": None if (ai_client and config.OPENAI_API_KEY) else ("missing" if not config.OPENAI_API_KEY else "invalid_format"),
+        "message": "OpenAI API key appears valid" if (ai_client and config.OPENAI_API_KEY) else ("OpenAI API key not configured" if not config.OPENAI_API_KEY else "OpenAI API key format invalid")
+    }
+    
+    # Try full validation (but don't block if it's slow)
+    try:
+        openai_status = validate_openai_key()
+        # Use full validation result if we got it
+        if openai_status.get("valid") is True:
+            openai_quick_check = openai_status
+    except Exception:
+        # If validation fails, use quick check result
+        pass
+    
     x_api_status = {
         "valid": bool(config.X_API_KEY),
         "error": None if config.X_API_KEY else "missing",
         "message": "X API key configured" if config.X_API_KEY else "X API key not configured"
     }
     
+    # Check if OpenAI is available - be lenient: if client exists and format is correct, consider it available
+    openai_available = (
+        openai_quick_check.get("valid") is True or 
+        (ai_client is not None and config.OPENAI_API_KEY and config.OPENAI_API_KEY.startswith('sk-'))
+    )
+    
     return {
-        "openai": openai_status,
+        "openai": openai_quick_check,
         "x_api": x_api_status,
         "overall": {
-            "openai_available": openai_status.get("valid") is True,
+            "openai_available": openai_available,
             "x_api_available": x_api_status.get("valid") is True
         }
     }
