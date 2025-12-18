@@ -567,16 +567,16 @@ async def search_users_endpoint(request: Request, query: str):
                     }]
                 }
         
-              result = {"users": []}
-              _cache_user_search(query, result)
-              return result
-          except Exception as e:
-              print(f"Error searching users: {e}")
-              import traceback
-              traceback.print_exc()
-              result = {"users": []}
-              _cache_user_search(query, result)
-              return result
+        result = {"users": []}
+        _cache_user_search(query, result)
+        return result
+    except Exception as e:
+        print(f"Error searching users: {e}")
+        import traceback
+        traceback.print_exc()
+        result = {"users": []}
+        _cache_user_search(query, result)
+        return result
 
 
 @app.post("/api/onboarding/connect-x")
