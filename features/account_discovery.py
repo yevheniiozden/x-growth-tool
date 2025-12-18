@@ -330,7 +330,7 @@ def get_posts_for_onboarding(
                 print(f"Executing search query {i+1}/{len(search_queries)}: {query[:80]}...")
                 tweets = client.search_recent_tweets(
                     query=query,
-                    max_results=60,  # Increased to get more results per query
+                    max_results=30,  # Reduced to speed up (we have multiple queries, 30 per query = plenty)
                     tweet_fields=['author_id', 'public_metrics', 'created_at', 'text', 'conversation_id'],
                     user_fields=['username', 'name']
                 )
