@@ -571,11 +571,11 @@ def skip_onboarding_phase(user_id: str) -> Dict[str, Any]:
         interactive["phase"] = phase + 1
         # Reset index for new phase
         interactive[f"phase{phase + 1}_index"] = 0
+        interactive[f"phase{phase + 1}_responses"] = []
     else:
-        # Complete onboarding
-        user["onboarding_complete"] = True
-        user["onboarding_step"] = "complete"
-        interactive["phase"] = 5
+        # Complete onboarding when skipping last phase
+        from onboarding_flow import complete_interactive_onboarding
+        return complete_interactive_onboarding(user_id)
     
     user["interactive_onboarding"] = interactive
     save_users(users)
@@ -583,7 +583,8 @@ def skip_onboarding_phase(user_id: str) -> Dict[str, Any]:
     return {
         "success": True,
         "message": "Phase skipped",
-        "next_phase": interactive.get("phase")
+        "next_phase": interactive.get("phase"),
+        "phase_complete": False
     }
 
 
