@@ -442,7 +442,8 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
                 },
                 "index": current_index,
                 "total": 1,
-                "placeholder": True
+                "placeholder": True,
+                "ai_enhanced": ai_enhanced_flag
             }
         print(f"Index {current_index} >= total posts {len(posts)} for phase {phase}")
         return {"success": False, "error": "No more posts in this phase"}
