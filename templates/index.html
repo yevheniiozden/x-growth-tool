@@ -3,8 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>X Growth AI Tool</title>
+    <title>X Growth AI • Your Personal Distribution OS</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #8b5cf6;
+            --accent: #ec4899;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --border: rgba(148, 163, 184, 0.1);
+            --glass: rgba(30, 41, 59, 0.7);
+            --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+        }
+        
         * {
             margin: 0;
             padding: 0;
@@ -12,284 +34,743 @@
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
             line-height: 1.6;
-            color: #333;
-            background: #f5f5f5;
-            padding: 20px;
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 2rem;
         }
         
-        h1 {
-            color: #1da1f2;
-            margin-bottom: 10px;
+        /* Header */
+        .header {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
         }
         
-        h2 {
-            color: #333;
-            margin-top: 30px;
-            margin-bottom: 15px;
-            border-bottom: 2px solid #1da1f2;
-            padding-bottom: 5px;
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
         }
         
-        h3 {
-            color: #666;
-            margin-top: 20px;
-            margin-bottom: 10px;
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
         }
         
-        nav {
-            margin: 20px 0;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 5px;
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 800;
         }
         
-        nav a {
-            display: inline-block;
-            margin-right: 15px;
-            padding: 8px 15px;
-            background: #1da1f2;
-            color: white;
+        .logo-text h1 {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary-light), var(--accent));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
+        }
+        
+        .logo-text p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Navigation */
+        .nav {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .nav-btn {
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-secondary);
             text-decoration: none;
-            border-radius: 4px;
+            font-weight: 500;
             font-size: 14px;
-        }
-        
-        nav a:hover {
-            background: #1a91da;
-        }
-        
-        .section {
-            margin: 20px 0;
-            padding: 20px;
-            background: #fafafa;
-            border-radius: 5px;
-            border-left: 4px solid #1da1f2;
-        }
-        
-        .post-item, .action-item {
-            margin: 15px 0;
-            padding: 15px;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        
-        .post-content {
-            font-size: 16px;
-            margin-bottom: 10px;
-            color: #333;
-        }
-        
-        .post-meta {
-            font-size: 12px;
-            color: #666;
-            margin-top: 10px;
-        }
-        
-        .rationale {
-            font-size: 13px;
-            color: #555;
-            font-style: italic;
-            margin-top: 8px;
-            padding: 8px;
-            background: #f0f0f0;
-            border-radius: 3px;
-        }
-        
-        button {
-            padding: 8px 15px;
-            margin: 5px;
-            border: none;
-            border-radius: 4px;
+            transition: all 0.3s ease;
             cursor: pointer;
+        }
+        
+        .nav-btn:hover {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            transform: translateY(-2px);
+        }
+        
+        .nav-btn.active {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border-color: transparent;
+        }
+        
+        /* Onboarding Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 3rem;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+        
+        .modal h2 {
+            font-size: 24px;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--primary-light), var(--accent));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .modal p {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+        
+        .onboarding-input {
+            width: 100%;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 16px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .onboarding-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 1.5rem 0;
+        }
+        
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+        
+        .progress-text {
+            color: var(--text-secondary);
             font-size: 14px;
+            margin-top: 0.5rem;
+        }
+        
+        /* Sections */
+        .section {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .section h2 {
+            font-size: 24px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .section-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        
+        /* Cards */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        
+        .card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary);
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.2);
+        }
+        
+        .card-value {
+            font-size: 36px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary-light), var(--accent));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        
+        .card-label {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .card-subtitle {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-top: 0.5rem;
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
         }
         
         .btn-primary {
-            background: #1da1f2;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
         }
         
         .btn-primary:hover {
-            background: #1a91da;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
         }
         
         .btn-secondary {
-            background: #6c757d;
-            color: white;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--bg-secondary);
         }
         
         .btn-danger {
-            background: #dc3545;
+            background: var(--error);
             color: white;
         }
         
-        .progress-bar {
+        /* Inputs */
+        input[type="text"], textarea {
             width: 100%;
-            height: 25px;
-            background: #e9ecef;
-            border-radius: 5px;
-            overflow: hidden;
-            margin: 10px 0;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
         }
         
-        .progress-fill {
-            height: 100%;
-            background: #1da1f2;
-            transition: width 0.3s;
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        /* Alerts */
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin: 1rem 0;
             display: flex;
             align-items: center;
-            justify-content: center;
-            color: white;
+            gap: 0.75rem;
+        }
+        
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: var(--success);
+        }
+        
+        .alert-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--error);
+        }
+        
+        .alert-info {
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: var(--primary-light);
+        }
+        
+        /* Post Items */
+        .post-item {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            transition: all 0.3s ease;
+        }
+        
+        .post-item:hover {
+            border-color: var(--primary);
+            transform: translateX(4px);
+        }
+        
+        .post-content {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+        
+        .post-meta {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
             font-size: 12px;
+            color: var(--text-muted);
+            margin: 1rem 0;
         }
         
-        .targets {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
+        .post-tags {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin: 1rem 0;
         }
         
-        .target-card {
-            padding: 15px;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            text-align: center;
+        .tag {
+            padding: 0.25rem 0.75rem;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 8px;
+            font-size: 12px;
+            color: var(--primary-light);
         }
         
-        .target-number {
-            font-size: 32px;
-            font-weight: bold;
-            color: #1da1f2;
-        }
-        
-        .target-label {
-            font-size: 14px;
-            color: #666;
-            margin-top: 5px;
-        }
-        
-        textarea {
-            width: 100%;
-            min-height: 100px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-family: inherit;
-            font-size: 14px;
-        }
-        
-        input[type="text"], input[type="date"], input[type="time"] {
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-            margin: 5px;
-        }
-        
-        .error {
-            color: #dc3545;
-            background: #f8d7da;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
-        }
-        
-        .success {
-            color: #155724;
-            background: #d4edda;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
+        .rationale {
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-left: 3px solid var(--primary);
+            border-radius: 8px;
+            margin: 1rem 0;
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-style: italic;
         }
         
         .hidden {
             display: none;
         }
+        
+        /* Loading Spinner */
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--bg-tertiary);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Action Items */
+        .action-item {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .action-content {
+            flex: 1;
+        }
+        
+        .action-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Progress Bar */
+        .progress-container {
+            width: 100%;
+            height: 12px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 6px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>X Growth AI Tool</h1>
-        <p>Your personal distribution operating system with a learning brain</p>
-        
-        <nav>
-            <a href="#" onclick="showSection('dashboard')">Dashboard</a>
-            <a href="#" onclick="showSection('content-intelligence')">Content Intelligence</a>
-            <a href="#" onclick="showSection('content-machine')">Content Machine</a>
-            <a href="#" onclick="showSection('reply-guy')">Reply Guy</a>
-            <a href="#" onclick="showSection('persona')">Persona State</a>
-        </nav>
-        
-        <!-- Dashboard Section -->
-        <div id="dashboard" class="section">
-            <h2>What Should I Do Today?</h2>
-            <div id="dashboard-content">
-                <p>Loading...</p>
+    <!-- Onboarding Modal -->
+    <div id="onboarding-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>🚀 Welcome to X Growth AI</h2>
+            <p>Let's set up your personal AI brain. Enter your X (Twitter) username to begin onboarding.</p>
+            <input type="text" id="onboarding-username" class="onboarding-input" placeholder="your_username (without @)" autofocus>
+            <button class="btn btn-primary" onclick="startOnboarding()" style="width: 100%;">
+                Start Onboarding
+            </button>
+            <div id="onboarding-progress" class="hidden">
+                <div class="progress-bar-container">
+                    <div id="progress-bar" class="progress-bar-fill" style="width: 0%"></div>
+                </div>
+                <div id="progress-text" class="progress-text">Initializing...</div>
             </div>
         </div>
-        
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-top">
+                <div class="logo">
+                    <div class="logo-icon">X</div>
+                    <div class="logo-text">
+                        <h1>X Growth AI</h1>
+                        <p>Your Personal Distribution Operating System</p>
+                    </div>
+                </div>
+                <div class="status-badge" id="status-badge">
+                    <div class="status-dot"></div>
+                    <span id="status-text">Checking connection...</span>
+                </div>
+            </div>
+            <nav class="nav">
+                <a href="#" class="nav-btn active" onclick="showSection('dashboard'); return false;">📊 Dashboard</a>
+                <a href="#" class="nav-btn" onclick="showSection('content-intelligence'); return false;">🔍 Intelligence</a>
+                <a href="#" class="nav-btn" onclick="showSection('content-machine'); return false;">✍️ Content</a>
+                <a href="#" class="nav-btn" onclick="showSection('reply-guy'); return false;">💬 Replies</a>
+                <a href="#" class="nav-btn" onclick="showSection('persona'); return false;">🧠 Persona</a>
+            </nav>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard" class="section">
+            <h2>
+                <span class="section-icon">📊</span>
+                What Should I Do Today?
+            </h2>
+            <div id="dashboard-content">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
         <!-- Content Intelligence Section -->
         <div id="content-intelligence" class="section hidden">
-            <h2>Content Intelligence</h2>
+            <h2>
+                <span class="section-icon">🔍</span>
+                Content Intelligence
+            </h2>
             <div>
-                <h3>Analyze X Lists</h3>
-                <input type="text" id="list-id-input" placeholder="Enter X List ID">
-                <button class="btn-primary" onclick="analyzeList()">Analyze List</button>
+                <h3 style="margin-bottom: 1rem; color: var(--text-secondary);">Analyze X Lists</h3>
+                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                    <input type="text" id="list-id-input" placeholder="Enter X List ID" style="flex: 1;">
+                    <button class="btn btn-primary" onclick="analyzeList()">Analyze</button>
+                </div>
                 <div id="intelligence-results"></div>
             </div>
         </div>
-        
+
         <!-- Content Machine Section -->
         <div id="content-machine" class="section hidden">
-            <h2>Content Machine</h2>
-            <div>
-                <button class="btn-primary" onclick="generatePosts()">Generate Monthly Posts</button>
-                <div id="content-results"></div>
+            <h2>
+                <span class="section-icon">✍️</span>
+                Content Machine
+            </h2>
+            <div style="margin-bottom: 2rem;">
+                <button class="btn btn-primary" onclick="generatePosts()">Generate Monthly Posts</button>
+                <div id="content-results" style="margin-top: 1rem;"></div>
             </div>
             <div id="scheduled-posts"></div>
         </div>
-        
+
         <!-- Reply Guy Section -->
         <div id="reply-guy" class="section hidden">
-            <h2>Reply Guy</h2>
+            <h2>
+                <span class="section-icon">💬</span>
+                Reply Guy
+            </h2>
             <div>
-                <h3>Check for Reply Opportunities</h3>
-                <p>Enter X List IDs (comma-separated) to monitor:</p>
-                <input type="text" id="reply-list-ids" placeholder="list_id_1, list_id_2" style="width: 400px;">
-                <button class="btn-primary" onclick="checkReplies()">Check for Reply Opportunities</button>
+                <h3 style="margin-bottom: 1rem; color: var(--text-secondary);">Check for Reply Opportunities</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1rem;">Enter X List IDs (comma-separated) to monitor:</p>
+                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                    <input type="text" id="reply-list-ids" placeholder="list_id_1, list_id_2" style="flex: 1;">
+                    <button class="btn btn-primary" onclick="checkReplies()">Check</button>
+                </div>
                 <div id="reply-results"></div>
                 <div id="pending-replies"></div>
             </div>
         </div>
-        
+
         <!-- Persona State Section -->
         <div id="persona" class="section hidden">
-            <h2>Persona State</h2>
+            <h2>
+                <span class="section-icon">🧠</span>
+                Persona State
+            </h2>
             <div id="persona-content">
-                <pre id="persona-display"></pre>
+                <pre id="persona-display" style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px; overflow-x: auto; color: var(--text-secondary); font-family: 'Inter', monospace; line-height: 1.8;"></pre>
             </div>
         </div>
     </div>
-    
+
     <script>
+        let onboardingComplete = false;
+        let currentUsername = null;
+
+        // Check authentication and onboarding status on load
+        async function checkAuthStatus() {
+            try {
+                // Check if persona state exists and has been initialized
+                const personaResponse = await fetch('/api/persona/state');
+                const personaData = await personaResponse.json();
+                
+                // Check if onboarding has been run (has learning history)
+                const hasOnboarding = personaData.learning_history && 
+                                     (personaData.learning_history.total_approvals > 0 || 
+                                      personaData.learning_history.last_updated);
+                
+                // Check X API connection
+                const xUserResponse = await fetch('/api/x/user');
+                const xUserData = await xUserResponse.json();
+                
+                if (xUserData.id || xUserData.username) {
+                    updateStatus('Connected', 'success');
+                    currentUsername = xUserData.username;
+                } else {
+                    updateStatus('Not Connected', 'warning');
+                }
+                
+                // Show onboarding if not completed
+                if (!hasOnboarding) {
+                    showOnboardingModal();
+                } else {
+                    onboardingComplete = true;
+                    loadDashboard();
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
+                updateStatus('Connection Error', 'error');
+                // Still show onboarding to allow user to proceed
+                showOnboardingModal();
+            }
+        }
+
+        function updateStatus(text, type) {
+            const statusText = document.getElementById('status-text');
+            const statusDot = statusText.previousElementSibling;
+            
+            statusText.textContent = text;
+            
+            if (type === 'success') {
+                statusDot.style.background = 'var(--success)';
+            } else if (type === 'warning') {
+                statusDot.style.background = 'var(--warning)';
+            } else {
+                statusDot.style.background = 'var(--error)';
+            }
+        }
+
+        function showOnboardingModal() {
+            document.getElementById('onboarding-modal').classList.remove('hidden');
+        }
+
+        function hideOnboardingModal() {
+            document.getElementById('onboarding-modal').classList.add('hidden');
+        }
+
+        async function startOnboarding() {
+            const username = document.getElementById('onboarding-username').value.trim();
+            if (!username) {
+                alert('Please enter your X username');
+                return;
+            }
+            
+            currentUsername = username;
+            const progressDiv = document.getElementById('onboarding-progress');
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            
+            progressDiv.classList.remove('hidden');
+            progressBar.style.width = '20%';
+            progressText.textContent = 'Connecting to X API...';
+            
+            try {
+                progressBar.style.width = '40%';
+                progressText.textContent = 'Fetching your activity...';
+                
+                const response = await fetch(`/api/onboarding/phase1?username=${encodeURIComponent(username)}`);
+                const data = await response.json();
+                
+                if (data.completed) {
+                    progressBar.style.width = '80%';
+                    progressText.textContent = 'Analyzing your persona...';
+                    
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    progressBar.style.width = '100%';
+                    progressText.textContent = 'Onboarding complete!';
+                    
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    onboardingComplete = true;
+                    hideOnboardingModal();
+                    updateStatus('Connected', 'success');
+                    loadDashboard();
+                } else {
+                    throw new Error('Onboarding failed');
+                }
+            } catch (error) {
+                progressText.textContent = `Error: ${error.message}`;
+                alert('Onboarding failed. Please check your X API connection and try again.');
+            }
+        }
+
+        // Allow Enter key to start onboarding
+        document.getElementById('onboarding-username').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                startOnboarding();
+            }
+        });
+
         // Show/hide sections
         function showSection(sectionId) {
             document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            
             document.getElementById(sectionId).classList.remove('hidden');
+            event.target.classList.add('active');
             
             // Load section data
             if (sectionId === 'dashboard') {
@@ -302,105 +783,133 @@
                 loadPendingReplies();
             }
         }
-        
+
         // Load dashboard
         async function loadDashboard() {
+            const content = document.getElementById('dashboard-content');
+            content.innerHTML = '<div class="spinner"></div>';
+            
             try {
-                const response = await fetch('/api/daily-actions/targets');
-                const data = await response.json();
+                const [targetsRes, progressRes, actionsRes] = await Promise.all([
+                    fetch('/api/daily-actions/targets'),
+                    fetch('/api/daily-actions/progress'),
+                    fetch('/api/daily-actions/prioritized')
+                ]);
                 
-                const progress = await fetch('/api/daily-actions/progress').then(r => r.json());
-                const actions = await fetch('/api/daily-actions/prioritized').then(r => r.json());
+                const targets = await targetsRes.json();
+                const progress = await progressRes.json();
+                const actions = await actionsRes.json();
                 
-                let html = '<div class="targets">';
-                for (const [key, value] of Object.entries(data.targets)) {
+                let html = '<div class="card-grid">';
+                for (const [key, value] of Object.entries(targets.targets)) {
                     const completed = progress.completed[key] || 0;
                     const remaining = progress.remaining[key] || 0;
+                    const percentage = value > 0 ? Math.round((completed / value) * 100) : 0;
+                    
                     html += `
-                        <div class="target-card">
-                            <div class="target-number">${completed}/${value}</div>
-                            <div class="target-label">${key.toUpperCase()}</div>
-                            <div style="font-size: 12px; color: #999; margin-top: 5px;">${remaining} remaining</div>
+                        <div class="card">
+                            <div class="card-value">${completed}/${value}</div>
+                            <div class="card-label">${key.toUpperCase()}</div>
+                            <div class="card-subtitle">${remaining} remaining</div>
+                            <div class="progress-container" style="margin-top: 1rem;">
+                                <div class="progress-fill" style="width: ${percentage}%"></div>
+                            </div>
                         </div>
                     `;
                 }
                 html += '</div>';
                 
-                html += `<div class="progress-bar"><div class="progress-fill" style="width: ${progress.completion_percentage}%">${Math.round(progress.completion_percentage)}% Complete</div></div>`;
+                html += `<div class="card" style="margin: 1.5rem 0;">
+                    <div class="card-label">Overall Progress</div>
+                    <div class="progress-container">
+                        <div class="progress-fill" style="width: ${progress.completion_percentage}%">${Math.round(progress.completion_percentage)}%</div>
+                    </div>
+                </div>`;
                 
-                html += '<h3>Prioritized Actions</h3>';
+                html += '<h3 style="margin-top: 2rem; margin-bottom: 1rem;">Prioritized Actions</h3>';
                 if (actions.length === 0) {
-                    html += '<p>No actions available. Generate content or check for reply opportunities.</p>';
+                    html += '<div class="alert alert-info">No actions available. Generate content or check for reply opportunities.</div>';
                 } else {
                     actions.forEach(action => {
                         html += `
                             <div class="action-item">
-                                <div><strong>${action.action}</strong></div>
-                                <div class="rationale">${action.rationale}</div>
-                                <button class="btn-primary" onclick="completeAction('${action.type}', '${action.data.id || ''}')">Mark Complete</button>
+                                <div class="action-content">
+                                    <div class="action-title">${action.action}</div>
+                                    <div class="rationale">${action.rationale}</div>
+                                </div>
+                                <button class="btn btn-primary" onclick="completeAction('${action.type}', '${action.data.id || ''}')">Complete</button>
                             </div>
                         `;
                     });
                 }
                 
-                document.getElementById('dashboard-content').innerHTML = html;
+                content.innerHTML = html;
             } catch (error) {
-                document.getElementById('dashboard-content').innerHTML = `<div class="error">Error loading dashboard: ${error.message}</div>`;
+                content.innerHTML = `<div class="alert alert-error">Error loading dashboard: ${error.message}</div>`;
             }
         }
-        
+
         // Analyze list
         async function analyzeList() {
-            const listId = document.getElementById('list-id-input').value;
+            const listId = document.getElementById('list-id-input').value.trim();
             if (!listId) {
                 alert('Please enter a list ID');
                 return;
             }
             
-            document.getElementById('intelligence-results').innerHTML = '<p>Analyzing...</p>';
+            const resultsDiv = document.getElementById('intelligence-results');
+            resultsDiv.innerHTML = '<div class="spinner"></div>';
             
             try {
                 const response = await fetch(`/api/content-intelligence/analyze/${listId}`);
                 const data = await response.json();
                 
-                let html = '<h3>Analysis Results</h3>';
-                html += `<pre style="white-space: pre-wrap; background: #f5f5f5; padding: 15px; border-radius: 5px;">${data.ai_analysis || 'No analysis available'}</pre>`;
+                if (data.error) {
+                    resultsDiv.innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+                    return;
+                }
                 
-                document.getElementById('intelligence-results').innerHTML = html;
+                let html = '<h3 style="margin-bottom: 1rem;">Analysis Results</h3>';
+                html += `<div class="card">
+                    <div style="white-space: pre-wrap; line-height: 1.8; color: var(--text-secondary);">${data.ai_analysis || 'No analysis available'}</div>
+                </div>`;
+                
+                resultsDiv.innerHTML = html;
             } catch (error) {
-                document.getElementById('intelligence-results').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                resultsDiv.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
             }
         }
-        
+
         // Generate posts
         async function generatePosts() {
-            document.getElementById('content-results').innerHTML = '<p>Generating posts...</p>';
+            const resultsDiv = document.getElementById('content-results');
+            resultsDiv.innerHTML = '<div class="spinner"></div>';
             
             try {
                 const response = await fetch('/api/content-machine/generate', { method: 'POST' });
                 const data = await response.json();
                 
                 if (data.error) {
-                    document.getElementById('content-results').innerHTML = `<div class="error">${data.error}</div>`;
+                    resultsDiv.innerHTML = `<div class="alert alert-error">${data.error}</div>`;
                     return;
                 }
                 
-                document.getElementById('content-results').innerHTML = `<div class="success">Generated ${data.count} posts!</div>`;
+                resultsDiv.innerHTML = `<div class="alert alert-success">✅ Generated ${data.count} posts!</div>`;
                 loadScheduledPosts();
             } catch (error) {
-                document.getElementById('content-results').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                resultsDiv.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
             }
         }
-        
+
         // Load scheduled posts
         async function loadScheduledPosts() {
             try {
                 const response = await fetch('/api/content-machine/schedule');
                 const data = await response.json();
                 
-                let html = '<h3>Scheduled Posts</h3>';
+                let html = '<h3 style="margin-bottom: 1rem;">Scheduled Posts</h3>';
                 if (data.length === 0) {
-                    html += '<p>No scheduled posts. Generate some posts first.</p>';
+                    html += '<div class="alert alert-info">No scheduled posts. Generate some posts first.</div>';
                 } else {
                     data.forEach(post => {
                         html += `
@@ -408,13 +917,19 @@
                                 <div class="post-content">${post.content}</div>
                                 <div class="rationale">${post.rationale || 'No rationale'}</div>
                                 <div class="post-meta">
-                                    Scheduled: ${post.scheduled_date} at ${post.scheduled_time} | 
-                                    Status: ${post.status} |
-                                    Topics: ${post.topic_tags?.join(', ') || 'None'}
+                                    <span>📅 ${post.scheduled_date} at ${post.scheduled_time}</span>
+                                    <span>📊 ${post.status}</span>
                                 </div>
-                                <button class="btn-primary" onclick="editPost('${post.id}')">Edit</button>
-                                <button class="btn-secondary" onclick="approvePost('${post.id}')">Approve</button>
-                                <button class="btn-danger" onclick="deletePost('${post.id}')">Delete</button>
+                                ${post.topic_tags && post.topic_tags.length > 0 ? `
+                                    <div class="post-tags">
+                                        ${post.topic_tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                                    </div>
+                                ` : ''}
+                                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                                    <button class="btn btn-secondary" onclick="editPost('${post.id}')">Edit</button>
+                                    <button class="btn btn-primary" onclick="approvePost('${post.id}')">Approve</button>
+                                    <button class="btn btn-danger" onclick="deletePost('${post.id}')">Delete</button>
+                                </div>
                             </div>
                         `;
                     });
@@ -422,21 +937,21 @@
                 
                 document.getElementById('scheduled-posts').innerHTML = html;
             } catch (error) {
-                document.getElementById('scheduled-posts').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                document.getElementById('scheduled-posts').innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
             }
         }
-        
+
         // Check replies
         async function checkReplies() {
-            const listIdsInput = document.getElementById('reply-list-ids').value;
+            const listIdsInput = document.getElementById('reply-list-ids').value.trim();
             if (!listIdsInput) {
                 alert('Please enter at least one List ID');
                 return;
             }
             
             const listIds = listIdsInput.split(',').map(id => id.trim()).filter(id => id);
-            
-            document.getElementById('reply-results').innerHTML = '<p>Checking for reply opportunities...</p>';
+            const resultsDiv = document.getElementById('reply-results');
+            resultsDiv.innerHTML = '<div class="spinner"></div>';
             
             try {
                 const response = await fetch('/api/reply-guy/check', {
@@ -446,37 +961,40 @@
                 });
                 const data = await response.json();
                 
-                document.getElementById('reply-results').innerHTML = `<div class="success">Found ${data.opportunities_found} opportunities. Check Telegram for notifications.</div>`;
+                resultsDiv.innerHTML = `<div class="alert alert-success">✅ Found ${data.opportunities_found} opportunities. Check Telegram for notifications.</div>`;
                 loadPendingReplies();
             } catch (error) {
-                document.getElementById('reply-results').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                resultsDiv.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
             }
         }
-        
+
         // Load pending replies
         async function loadPendingReplies() {
             try {
                 const response = await fetch('/api/reply-guy/pending');
                 const replies = await response.json();
                 
-                let html = '<h3>Pending Reply Opportunities</h3>';
+                let html = '<h3 style="margin-bottom: 1rem;">Pending Reply Opportunities</h3>';
                 if (replies.length === 0) {
-                    html += '<p>No pending replies. Check for new opportunities.</p>';
+                    html += '<div class="alert alert-info">No pending replies. Check for new opportunities.</div>';
                 } else {
                     replies.forEach(opportunity => {
                         const post = opportunity.original_post || {};
                         html += `
                             <div class="post-item">
-                                <div><strong>From: @${post.author || 'Unknown'}</strong></div>
+                                <div style="font-weight: 600; margin-bottom: 0.5rem;">From: @${post.author || 'Unknown'}</div>
                                 <div class="post-content">${post.text || ''}</div>
-                                <h4>Reply Suggestions:</h4>
+                                <h4 style="margin: 1rem 0 0.5rem 0;">Reply Suggestions:</h4>
                         `;
                         opportunity.suggestions?.forEach((suggestion, idx) => {
                             html += `
-                                <div style="margin: 10px 0; padding: 10px; background: #f9f9f9; border-radius: 3px;">
-                                    <div><strong>[${suggestion.angle?.toUpperCase() || 'EXTEND'}]</strong> ${suggestion.content}</div>
+                                <div class="card" style="margin: 0.5rem 0;">
+                                    <div style="margin-bottom: 0.5rem;">
+                                        <span class="tag">${suggestion.angle?.toUpperCase() || 'EXTEND'}</span>
+                                    </div>
+                                    <div style="margin-bottom: 0.5rem;">${suggestion.content}</div>
                                     <div class="rationale">${suggestion.rationale || ''}</div>
-                                    <button class="btn-primary" onclick="markReplyUsed('${opportunity.post_id}', '${suggestion.content.replace(/'/g, "\\'")}')">Use This Reply</button>
+                                    <button class="btn btn-primary" onclick="markReplyUsed('${opportunity.post_id}', '${suggestion.content.replace(/'/g, "\\'")}')" style="margin-top: 0.5rem;">Use This Reply</button>
                                 </div>
                             `;
                         });
@@ -486,10 +1004,10 @@
                 
                 document.getElementById('pending-replies').innerHTML = html;
             } catch (error) {
-                document.getElementById('pending-replies').innerHTML = `<div class="error">Error loading replies: ${error.message}</div>`;
+                document.getElementById('pending-replies').innerHTML = `<div class="alert alert-error">Error loading replies: ${error.message}</div>`;
             }
         }
-        
+
         // Mark reply as used
         async function markReplyUsed(postId, replyContent) {
             try {
@@ -501,7 +1019,7 @@
                 alert('Error marking reply as used: ' + error.message);
             }
         }
-        
+
         // Load persona
         async function loadPersona() {
             try {
@@ -512,7 +1030,7 @@
                 document.getElementById('persona-display').textContent = `Error: ${error.message}`;
             }
         }
-        
+
         // Post actions
         async function editPost(postId) {
             const newContent = prompt('Enter new content:');
@@ -529,7 +1047,7 @@
                 alert('Error updating post: ' + error.message);
             }
         }
-        
+
         async function approvePost(postId) {
             try {
                 await fetch(`/api/content-machine/posts/${postId}/approve`, { method: 'POST' });
@@ -539,7 +1057,7 @@
                 alert('Error approving post: ' + error.message);
             }
         }
-        
+
         async function deletePost(postId) {
             if (!confirm('Delete this post?')) return;
             
@@ -550,7 +1068,7 @@
                 alert('Error deleting post: ' + error.message);
             }
         }
-        
+
         // Complete action
         async function completeAction(actionType, actionId) {
             try {
@@ -564,12 +1082,11 @@
                 alert('Error tracking action: ' + error.message);
             }
         }
-        
-        // Load dashboard on page load
+
+        // Initialize on page load
         window.onload = () => {
-            showSection('dashboard');
+            checkAuthStatus();
         };
     </script>
 </body>
 </html>
-

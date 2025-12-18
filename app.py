@@ -271,6 +271,23 @@ async def get_x_user_endpoint():
 
 
 # Onboarding API
+@app.get("/api/onboarding/status")
+async def onboarding_status_endpoint():
+    """Check if onboarding has been completed"""
+    try:
+        state = load_persona_state()
+        has_onboarding = (
+            state.get("learning_history", {}).get("last_updated") is not None or
+            state.get("learning_history", {}).get("total_approvals", 0) > 0
+        )
+        return {
+            "onboarding_complete": has_onboarding,
+            "last_updated": state.get("learning_history", {}).get("last_updated")
+        }
+    except Exception as e:
+        return {"onboarding_complete": False, "error": str(e)}
+
+
 @app.post("/api/onboarding/phase1")
 async def onboarding_phase1_endpoint(username: Optional[str] = None):
     """Run Phase 1 onboarding (passive ingestion)"""

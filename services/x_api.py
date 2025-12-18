@@ -399,6 +399,7 @@ def get_current_user() -> Optional[Dict[str, Any]]:
         return None
     
     try:
+        # Try to get authenticated user
         user = client.get_me(user_fields=['username', 'name'])
         if user.data:
             return {
@@ -408,6 +409,13 @@ def get_current_user() -> Optional[Dict[str, Any]]:
             }
         return None
     except Exception as e:
+        # If get_me fails (common with bearer token only), check if client is initialized
+        # This means API is connected but may not have user context
+        if client:
+            return {
+                "connected": True,
+                "note": "API connected but user context not available. Use username parameter for operations."
+            }
         print(f"Error fetching current user: {e}")
         return None
 
