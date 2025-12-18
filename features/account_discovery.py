@@ -300,7 +300,7 @@ def get_posts_for_onboarding(
                 print(f"Executing search query {i+1}/{len(search_queries)}: {query[:80]}...")
                 tweets = client.search_recent_tweets(
                     query=query,
-                    max_results=40,  # Reduced per query since we're running multiple
+                    max_results=60,  # Increased to get more results per query
                     tweet_fields=['author_id', 'public_metrics', 'created_at', 'text', 'conversation_id'],
                     user_fields=['username', 'name']
                 )
@@ -310,13 +310,16 @@ def get_posts_for_onboarding(
                     print(f"Query {i+1} returned {len(tweet_list)} tweets")
                     all_tweets.extend(tweet_list)
                 else:
-                    print(f"Query {i+1} returned no tweets")
+                    print(f"Query {i+1} returned no tweets (tweets={tweets}, data={tweets.data if tweets else None})")
             except Exception as api_error:
                 error_msg = str(api_error)
                 if "401" in error_msg or "Unauthorized" in error_msg:
                     print(f"X API authentication error for query {i+1}: {error_msg}")
+                    print("Please check your X_API_KEY in environment variables")
                 else:
                     print(f"Error executing query {i+1}: {error_msg}")
+                    import traceback
+                    traceback.print_exc()
                 continue
         
         # Deduplicate tweets by ID

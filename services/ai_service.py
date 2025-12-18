@@ -491,25 +491,48 @@ def generate_search_queries(keywords: List[str], context: str = "") -> List[str]
     Returns:
         List of search query strings optimized for X API
     """
-    if not client or not keywords:
-        # Fallback: simple OR query
-        return [" OR ".join(keywords[:3]) + " -is:retweet -is:reply lang:en"]
+    if not keywords:
+        return []
     
-    # First expand keywords semantically
-    expansion = expand_keywords_semantically(keywords)
-    expanded_keywords = expansion.get("expanded_keywords", {})
-    themes = expansion.get("themes", [])
+    # Always create fallback queries first (work even without AI)
+    fallback_queries = []
     
-    # Collect all terms
-    all_terms = []
-    for keyword, expansions in expanded_keywords.items():
-        all_terms.extend([keyword] + expansions[:3])  # Limit expansions per keyword
+    # Query 1: All keywords with OR
+    if len(keywords) <= 5:
+        fallback_queries.append(" OR ".join(keywords) + " -is:retweet -is:reply lang:en")
+    else:
+        # If too many keywords, use top 5
+        fallback_queries.append(" OR ".join(keywords[:5]) + " -is:retweet -is:reply lang:en")
     
-    # Add themes as additional search terms
-    all_terms.extend(themes[:5])
+    # Query 2: Top 3 keywords (more focused)
+    if len(keywords) >= 3:
+        fallback_queries.append(" OR ".join(keywords[:3]) + " -is:retweet -is:reply lang:en")
     
-    # Generate multiple query variations
-    prompt = f"""Generate 3-5 optimized search queries for X/Twitter API based on these keywords and context.
+    # Query 3: Individual top keywords (broader search)
+    if len(keywords) >= 1:
+        fallback_queries.append(f"{keywords[0]} -is:retweet -is:reply lang:en")
+    
+    if not client:
+        # Return fallback queries if no AI client
+        return fallback_queries[:3]
+    
+    # Try to use AI for enhanced queries
+    try:
+        # First expand keywords semantically
+        expansion = expand_keywords_semantically(keywords)
+        expanded_keywords = expansion.get("expanded_keywords", {})
+        themes = expansion.get("themes", [])
+        
+        # Collect all terms
+        all_terms = []
+        for keyword, expansions in expanded_keywords.items():
+            all_terms.extend([keyword] + expansions[:3])  # Limit expansions per keyword
+        
+        # Add themes as additional search terms
+        all_terms.extend(themes[:5])
+        
+        # Generate multiple query variations
+        prompt = f"""Generate 3-5 optimized search queries for X/Twitter API based on these keywords and context.
 
 Keywords: {', '.join(keywords)}
 Context: {context if context else 'General content discovery'}
@@ -527,11 +550,10 @@ Each query should:
 - Be optimized for finding engaging, popular content
 - Be different from others (different angles/combinations)
 
-Return JSON array:
-["query1", "query2", "query3", ...]
+Return JSON with:
+{{"queries": ["query1", "query2", "query3", ...]}}
 """
-    
-    try:
+        
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -547,23 +569,30 @@ Return JSON array:
         result = json.loads(response.choices[0].message.content)
         
         queries = result.get("queries", [])
-        if not queries:
-            # Fallback: create queries from expanded terms
-            queries = []
-            # Query 1: Original keywords
-            queries.append(" OR ".join(keywords[:3]) + " -is:retweet -is:reply lang:en")
-            # Query 2: Mix of original and expanded
-            if all_terms:
-                queries.append(" OR ".join(all_terms[:5]) + " -is:retweet -is:reply lang:en")
-            # Query 3: Themes if available
-            if themes:
-                queries.append(" OR ".join(themes[:3]) + " -is:retweet -is:reply lang:en")
+        if queries and len(queries) > 0:
+            # Validate queries have proper format
+            validated_queries = []
+            for q in queries:
+                if isinstance(q, str) and len(q) > 0:
+                    # Ensure query has required filters
+                    if "-is:retweet" not in q:
+                        q += " -is:retweet"
+                    if "-is:reply" not in q:
+                        q += " -is:reply"
+                    if "lang:en" not in q:
+                        q += " lang:en"
+                    validated_queries.append(q)
+            
+            if validated_queries:
+                return validated_queries[:5]  # Limit to 5 queries max
         
-        return queries[:5]  # Limit to 5 queries max
+        # If AI queries invalid, use fallback
+        print("AI-generated queries invalid, using fallback queries")
+        return fallback_queries[:3]
     except Exception as e:
-        print(f"Error generating search queries: {e}")
-        # Fallback: simple OR query
-        return [" OR ".join(keywords[:3]) + " -is:retweet -is:reply lang:en"]
+        print(f"Error generating search queries with AI: {e}")
+        # Fallback: use basic queries
+        return fallback_queries[:3]
 
 
 def analyze_post_relevance(post_text: str, keywords: List[str]) -> float:
