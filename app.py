@@ -905,22 +905,28 @@ async def get_oembed_endpoint(request: Request, url: str):
             traceback.print_exc()
         
         # Fallback: Construct embed HTML manually using Twitter widget
-        # Extract tweet ID for better embedding
-        tweet_id_match = re.search(r'/status/(\d+)', url)
-        tweet_id = tweet_id_match.group(1) if tweet_id_match else None
-        
-        if tweet_id:
-            html = f'''<blockquote class="twitter-tweet" data-theme="dark" data-dnt="true" data-conversation="none">
-                <p lang="en" dir="ltr"></p>
+        # Extract tweet ID and username for better embedding
+        tweet_match = re.search(r'(?:twitter\.com|x\.com)/([^/]+)/status/(\d+)', url)
+        if tweet_match:
+            username = tweet_match.group(1)
+            tweet_id = tweet_match.group(2)
+            # Use proper Twitter embed format
+            html = f'''<blockquote class="twitter-tweet" data-theme="dark" data-dnt="true" data-conversation="none" data-lang="en">
                 <a href="{url}"></a>
-            </blockquote>
-            <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'''
+            </blockquote>'''
         else:
-            html = f'''<blockquote class="twitter-tweet" data-theme="dark" data-dnt="true">
-                <p lang="en" dir="ltr"></p>
-                <a href="{url}"></a>
-            </blockquote>
-            <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'''
+            # Try to extract just tweet ID
+            tweet_id_match = re.search(r'/status/(\d+)', url)
+            tweet_id = tweet_id_match.group(1) if tweet_id_match else None
+            
+            if tweet_id:
+                html = f'''<blockquote class="twitter-tweet" data-theme="dark" data-dnt="true" data-conversation="none" data-lang="en">
+                    <a href="{url}"></a>
+                </blockquote>'''
+            else:
+                html = f'''<blockquote class="twitter-tweet" data-theme="dark" data-dnt="true" data-lang="en">
+                    <a href="{url}"></a>
+                </blockquote>'''
         
         return {
             "success": True,
