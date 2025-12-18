@@ -2513,6 +2513,15 @@
                 const data = await response.json();
                 
                 if (data.success) {
+                    // Update progress immediately after response
+                    const statusResponse = await fetch('/api/onboarding/interactive/status', {
+                        headers: getAuthHeaders()
+                    });
+                    if (statusResponse.ok) {
+                        const status = await statusResponse.json();
+                        updateOnboardingProgress(status);
+                    }
+                    
                     // Check if phase is complete
                     if (data.phase_complete) {
                         if (currentOnboardingPhase < 4) {
@@ -2520,30 +2529,21 @@
                             currentOnboardingPhase = data.next_phase;
                             await loadOnboardingPhase(currentOnboardingPhase);
                             
-                            // Update status
-                            const statusResponse = await fetch('/api/onboarding/interactive/status', {
+                            // Update progress again for new phase
+                            const newStatusResponse = await fetch('/api/onboarding/interactive/status', {
                                 headers: getAuthHeaders()
                             });
-                            if (statusResponse.ok) {
-                                const status = await statusResponse.json();
-                                updateOnboardingProgress(status);
+                            if (newStatusResponse.ok) {
+                                const newStatus = await newStatusResponse.json();
+                                updateOnboardingProgress(newStatus);
                             }
                         } else {
                             // All phases complete
                             await completeInteractiveOnboarding();
                         }
                     } else {
-                        // Load next post/profile in same phase
+                        // Load next item in same phase
                         await loadOnboardingPhase(currentOnboardingPhase);
-                        
-                        // Update progress
-                        const statusResponse = await fetch('/api/onboarding/interactive/status', {
-                            headers: getAuthHeaders()
-                        });
-                        if (statusResponse.ok) {
-                            const status = await statusResponse.json();
-                            updateOnboardingProgress(status);
-                        }
                     }
                 } else {
                     alert('Error saving response: ' + (data.error || 'Unknown error'));
