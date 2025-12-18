@@ -448,7 +448,16 @@ def get_posts_for_onboarding(
             min(x['popularity_score'] / 1000, 1.0) * 0.6  # Normalize popularity to 0-1
         ), reverse=True)
         
-        return posts[:max_results]
+        # Limit to max_results
+        posts = posts[:max_results]
+        
+        # Verify all posts have URLs (they should all have URLs since we skip posts without usernames)
+        posts_with_urls = [p for p in posts if p.get('url')]
+        if len(posts_with_urls) < len(posts):
+            print(f"Warning: {len(posts) - len(posts_with_urls)} posts missing URLs, filtering them out")
+        
+        print(f"Returning {len(posts_with_urls)} posts with URLs for onboarding (type: {post_type}, requested: {max_results})")
+        return posts_with_urls
         
     except Exception as e:
         error_msg = str(e)
