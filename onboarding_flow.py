@@ -335,7 +335,8 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
                     "author_username": "system",
                     "likes": 0,
                     "replies": 0,
-                    "relevance_score": 0.5
+                    "relevance_score": 0.5,
+                    "url": None  # No URL for placeholder - frontend will handle this
                 },
                 "index": current_index,
                 "total": 1,
@@ -343,9 +344,23 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
             }
         return {"success": False, "error": "No more posts in this phase"}
     
+    # Get the post and ensure it has a URL
+    post = posts[current_index]
+    
+    # If post doesn't have a URL, try to construct it from available data
+    if not post.get('url'):
+        author_username = post.get('author_username') or post.get('username')
+        post_id = post.get('id')
+        if author_username and post_id:
+            post['url'] = f"https://twitter.com/{author_username}/status/{post_id}"
+        else:
+            # If we can't construct URL, log warning but still return post
+            print(f"Warning: Post {post.get('id')} missing URL and cannot construct it")
+            post['url'] = None
+    
     return {
         "success": True,
-        "post": posts[current_index],
+        "post": post,
         "index": current_index,
         "total": len(posts)
     }

@@ -2535,8 +2535,17 @@
                     if (phaseElement && postContentElement) {
                         phaseElement.classList.remove('hidden');
                         
-                        // Try to embed post using oEmbed if URL is available
-                        if (data.post.url && data.post.url.includes('twitter.com') && data.post.url.includes('/status/')) {
+                        // Check if this is a placeholder post (no URL)
+                        if (data.placeholder || !data.post.url) {
+                            // Placeholder post or missing URL - show message
+                            postContentElement.innerHTML = `
+                                <div style="text-align: center; padding: 2rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; margin: 1.5rem 0;">
+                                    <div style="color: var(--text-primary); margin-bottom: 1rem;">${data.post.text || 'No post available'}</div>
+                                    <div style="color: var(--text-secondary); font-size: 14px;">This is a placeholder. Real posts will be embedded from Twitter.</div>
+                                </div>
+                            `;
+                        } else if (data.post.url && data.post.url.includes('twitter.com') && data.post.url.includes('/status/')) {
+                            // Try to embed post using oEmbed if URL is available
                             // Show loading state
                             postContentElement.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading post...</div>';
                             
