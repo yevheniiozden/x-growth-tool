@@ -2588,6 +2588,24 @@
                     if (phaseElement && postContentElement) {
                         phaseElement.classList.remove('hidden');
                         
+                        // Check if this is a loading state
+                        if (data.loading) {
+                            // Background task is preparing data - show loading and auto-retry
+                            postContentElement.innerHTML = `
+                                <div style="text-align: center; padding: 3rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; margin: 1.5rem 0;">
+                                    <div style="font-size: 48px; margin-bottom: 1rem;">⏳</div>
+                                    <div style="color: var(--text-primary); font-size: 18px; font-weight: 600; margin-bottom: 0.5rem;">${data.post.text || 'Loading posts...'}</div>
+                                    <div style="color: var(--text-secondary); font-size: 14px; margin-bottom: 1.5rem;">Fetching relevant content for you. This may take a moment.</div>
+                                    <div class="spinner" style="margin: 0 auto;"></div>
+                                </div>
+                            `;
+                            // Auto-retry after 3 seconds
+                            setTimeout(() => {
+                                loadOnboardingPost(phase);
+                            }, 3000);
+                            return;
+                        }
+                        
                         // Check if this is a placeholder post (no URL)
                         if (data.placeholder || !data.post.url) {
                             // Placeholder post or missing URL - show message
