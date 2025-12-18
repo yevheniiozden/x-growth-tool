@@ -1,0 +1,50 @@
+{
+  "topic_affinity": {
+    "saas": 0.5,
+    "ai": 0.5,
+    "startups": 0.5,
+    "product": 0.5,
+    "distribution": 0.5,
+    "operations": 0.5,
+    "online_business": 0.5,
+    "money": 0.5,
+    "personal_reflections": 0.5,
+    "humor": 0.5
+  },
+  "tone_style": {
+    "sentence_length": "medium",
+    "question_frequency": 0.4,
+    "humor_frequency": 0.2,
+    "emotional_intensity": "moderate",
+    "formality": "casual",
+    "contrarian_tolerance": 0.5,
+    "certainty_level": "balanced"
+  },
+  "engagement_behavior": {
+    "likes_per_day_baseline": 1.0,
+    "replies_per_day_baseline": 1.0,
+    "follow_after_reply_tendency": 0.3,
+    "early_engagement_tendency": 0.7,
+    "reply_depth_preference": "medium"
+  },
+  "risk_sensitivity": {
+    "hot_takes_comfort": 0.4,
+    "safe_vs_experimental": 0.6,
+    "challenge_others_tendency": 0.5
+  },
+  "energy_cadence": {
+    "posts_per_day_tolerance": 2,
+    "engagement_fatigue_signals": [],
+    "preferred_posting_times": [
+      "09:00",
+      "17:00"
+    ],
+    "consistency_preference": "moderate"
+  },
+  "learning_history": {
+    "total_approvals": 0,
+    "total_rejections": 0,
+    "total_edits": 0,
+    "last_updated": "2025-12-18T02:08:14.584412"
+  }
+}

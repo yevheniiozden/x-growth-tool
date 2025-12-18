@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X Growth AI Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #1da1f2;
+            margin-bottom: 10px;
+        }
+        
+        h2 {
+            color: #333;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #1da1f2;
+            padding-bottom: 5px;
+        }
+        
+        h3 {
+            color: #666;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        
+        nav {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        nav a {
+            display: inline-block;
+            margin-right: 15px;
+            padding: 8px 15px;
+            background: #1da1f2;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        nav a:hover {
+            background: #1a91da;
+        }
+        
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #fafafa;
+            border-radius: 5px;
+            border-left: 4px solid #1da1f2;
+        }
+        
+        .post-item, .action-item {
+            margin: 15px 0;
+            padding: 15px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .post-content {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .post-meta {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+        }
+        
+        .rationale {
+            font-size: 13px;
+            color: #555;
+            font-style: italic;
+            margin-top: 8px;
+            padding: 8px;
+            background: #f0f0f0;
+            border-radius: 3px;
+        }
+        
+        button {
+            padding: 8px 15px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .btn-primary {
+            background: #1da1f2;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #1a91da;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 25px;
+            background: #e9ecef;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #1da1f2;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+        }
+        
+        .targets {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .target-card {
+            padding: 15px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .target-number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1da1f2;
+        }
+        
+        .target-label {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        
+        input[type="text"], input[type="date"], input[type="time"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            margin: 5px;
+        }
+        
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>X Growth AI Tool</h1>
+        <p>Your personal distribution operating system with a learning brain</p>
+        
+        <nav>
+            <a href="#" onclick="showSection('dashboard')">Dashboard</a>
+            <a href="#" onclick="showSection('content-intelligence')">Content Intelligence</a>
+            <a href="#" onclick="showSection('content-machine')">Content Machine</a>
+            <a href="#" onclick="showSection('reply-guy')">Reply Guy</a>
+            <a href="#" onclick="showSection('persona')">Persona State</a>
+        </nav>
+        
+        <!-- Dashboard Section -->
+        <div id="dashboard" class="section">
+            <h2>What Should I Do Today?</h2>
+            <div id="dashboard-content">
+                <p>Loading...</p>
+            </div>
+        </div>
+        
+        <!-- Content Intelligence Section -->
+        <div id="content-intelligence" class="section hidden">
+            <h2>Content Intelligence</h2>
+            <div>
+                <h3>Analyze X Lists</h3>
+                <input type="text" id="list-id-input" placeholder="Enter X List ID">
+                <button class="btn-primary" onclick="analyzeList()">Analyze List</button>
+                <div id="intelligence-results"></div>
+            </div>
+        </div>
+        
+        <!-- Content Machine Section -->
+        <div id="content-machine" class="section hidden">
+            <h2>Content Machine</h2>
+            <div>
+                <button class="btn-primary" onclick="generatePosts()">Generate Monthly Posts</button>
+                <div id="content-results"></div>
+            </div>
+            <div id="scheduled-posts"></div>
+        </div>
+        
+        <!-- Reply Guy Section -->
+        <div id="reply-guy" class="section hidden">
+            <h2>Reply Guy</h2>
+            <div>
+                <h3>Check for Reply Opportunities</h3>
+                <p>Enter X List IDs (comma-separated) to monitor:</p>
+                <input type="text" id="reply-list-ids" placeholder="list_id_1, list_id_2" style="width: 400px;">
+                <button class="btn-primary" onclick="checkReplies()">Check for Reply Opportunities</button>
+                <div id="reply-results"></div>
+                <div id="pending-replies"></div>
+            </div>
+        </div>
+        
+        <!-- Persona State Section -->
+        <div id="persona" class="section hidden">
+            <h2>Persona State</h2>
+            <div id="persona-content">
+                <pre id="persona-display"></pre>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Show/hide sections
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+            document.getElementById(sectionId).classList.remove('hidden');
+            
+            // Load section data
+            if (sectionId === 'dashboard') {
+                loadDashboard();
+            } else if (sectionId === 'persona') {
+                loadPersona();
+            } else if (sectionId === 'content-machine') {
+                loadScheduledPosts();
+            } else if (sectionId === 'reply-guy') {
+                loadPendingReplies();
+            }
+        }
+        
+        // Load dashboard
+        async function loadDashboard() {
+            try {
+                const response = await fetch('/api/daily-actions/targets');
+                const data = await response.json();
+                
+                const progress = await fetch('/api/daily-actions/progress').then(r => r.json());
+                const actions = await fetch('/api/daily-actions/prioritized').then(r => r.json());
+                
+                let html = '<div class="targets">';
+                for (const [key, value] of Object.entries(data.targets)) {
+                    const completed = progress.completed[key] || 0;
+                    const remaining = progress.remaining[key] || 0;
+                    html += `
+                        <div class="target-card">
+                            <div class="target-number">${completed}/${value}</div>
+                            <div class="target-label">${key.toUpperCase()}</div>
+                            <div style="font-size: 12px; color: #999; margin-top: 5px;">${remaining} remaining</div>
+                        </div>
+                    `;
+                }
+                html += '</div>';
+                
+                html += `<div class="progress-bar"><div class="progress-fill" style="width: ${progress.completion_percentage}%">${Math.round(progress.completion_percentage)}% Complete</div></div>`;
+                
+                html += '<h3>Prioritized Actions</h3>';
+                if (actions.length === 0) {
+                    html += '<p>No actions available. Generate content or check for reply opportunities.</p>';
+                } else {
+                    actions.forEach(action => {
+                        html += `
+                            <div class="action-item">
+                                <div><strong>${action.action}</strong></div>
+                                <div class="rationale">${action.rationale}</div>
+                                <button class="btn-primary" onclick="completeAction('${action.type}', '${action.data.id || ''}')">Mark Complete</button>
+                            </div>
+                        `;
+                    });
+                }
+                
+                document.getElementById('dashboard-content').innerHTML = html;
+            } catch (error) {
+                document.getElementById('dashboard-content').innerHTML = `<div class="error">Error loading dashboard: ${error.message}</div>`;
+            }
+        }
+        
+        // Analyze list
+        async function analyzeList() {
+            const listId = document.getElementById('list-id-input').value;
+            if (!listId) {
+                alert('Please enter a list ID');
+                return;
+            }
+            
+            document.getElementById('intelligence-results').innerHTML = '<p>Analyzing...</p>';
+            
+            try {
+                const response = await fetch(`/api/content-intelligence/analyze/${listId}`);
+                const data = await response.json();
+                
+                let html = '<h3>Analysis Results</h3>';
+                html += `<pre style="white-space: pre-wrap; background: #f5f5f5; padding: 15px; border-radius: 5px;">${data.ai_analysis || 'No analysis available'}</pre>`;
+                
+                document.getElementById('intelligence-results').innerHTML = html;
+            } catch (error) {
+                document.getElementById('intelligence-results').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        // Generate posts
+        async function generatePosts() {
+            document.getElementById('content-results').innerHTML = '<p>Generating posts...</p>';
+            
+            try {
+                const response = await fetch('/api/content-machine/generate', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('content-results').innerHTML = `<div class="error">${data.error}</div>`;
+                    return;
+                }
+                
+                document.getElementById('content-results').innerHTML = `<div class="success">Generated ${data.count} posts!</div>`;
+                loadScheduledPosts();
+            } catch (error) {
+                document.getElementById('content-results').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        // Load scheduled posts
+        async function loadScheduledPosts() {
+            try {
+                const response = await fetch('/api/content-machine/schedule');
+                const data = await response.json();
+                
+                let html = '<h3>Scheduled Posts</h3>';
+                if (data.length === 0) {
+                    html += '<p>No scheduled posts. Generate some posts first.</p>';
+                } else {
+                    data.forEach(post => {
+                        html += `
+                            <div class="post-item">
+                                <div class="post-content">${post.content}</div>
+                                <div class="rationale">${post.rationale || 'No rationale'}</div>
+                                <div class="post-meta">
+                                    Scheduled: ${post.scheduled_date} at ${post.scheduled_time} | 
+                                    Status: ${post.status} |
+                                    Topics: ${post.topic_tags?.join(', ') || 'None'}
+                                </div>
+                                <button class="btn-primary" onclick="editPost('${post.id}')">Edit</button>
+                                <button class="btn-secondary" onclick="approvePost('${post.id}')">Approve</button>
+                                <button class="btn-danger" onclick="deletePost('${post.id}')">Delete</button>
+                            </div>
+                        `;
+                    });
+                }
+                
+                document.getElementById('scheduled-posts').innerHTML = html;
+            } catch (error) {
+                document.getElementById('scheduled-posts').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        // Check replies
+        async function checkReplies() {
+            const listIdsInput = document.getElementById('reply-list-ids').value;
+            if (!listIdsInput) {
+                alert('Please enter at least one List ID');
+                return;
+            }
+            
+            const listIds = listIdsInput.split(',').map(id => id.trim()).filter(id => id);
+            
+            document.getElementById('reply-results').innerHTML = '<p>Checking for reply opportunities...</p>';
+            
+            try {
+                const response = await fetch('/api/reply-guy/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ list_ids: listIds })
+                });
+                const data = await response.json();
+                
+                document.getElementById('reply-results').innerHTML = `<div class="success">Found ${data.opportunities_found} opportunities. Check Telegram for notifications.</div>`;
+                loadPendingReplies();
+            } catch (error) {
+                document.getElementById('reply-results').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        // Load pending replies
+        async function loadPendingReplies() {
+            try {
+                const response = await fetch('/api/reply-guy/pending');
+                const replies = await response.json();
+                
+                let html = '<h3>Pending Reply Opportunities</h3>';
+                if (replies.length === 0) {
+                    html += '<p>No pending replies. Check for new opportunities.</p>';
+                } else {
+                    replies.forEach(opportunity => {
+                        const post = opportunity.original_post || {};
+                        html += `
+                            <div class="post-item">
+                                <div><strong>From: @${post.author || 'Unknown'}</strong></div>
+                                <div class="post-content">${post.text || ''}</div>
+                                <h4>Reply Suggestions:</h4>
+                        `;
+                        opportunity.suggestions?.forEach((suggestion, idx) => {
+                            html += `
+                                <div style="margin: 10px 0; padding: 10px; background: #f9f9f9; border-radius: 3px;">
+                                    <div><strong>[${suggestion.angle?.toUpperCase() || 'EXTEND'}]</strong> ${suggestion.content}</div>
+                                    <div class="rationale">${suggestion.rationale || ''}</div>
+                                    <button class="btn-primary" onclick="markReplyUsed('${opportunity.post_id}', '${suggestion.content.replace(/'/g, "\\'")}')">Use This Reply</button>
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                    });
+                }
+                
+                document.getElementById('pending-replies').innerHTML = html;
+            } catch (error) {
+                document.getElementById('pending-replies').innerHTML = `<div class="error">Error loading replies: ${error.message}</div>`;
+            }
+        }
+        
+        // Mark reply as used
+        async function markReplyUsed(postId, replyContent) {
+            try {
+                await fetch(`/api/reply-guy/mark-used/${postId}?reply_content=${encodeURIComponent(replyContent)}`, {
+                    method: 'POST'
+                });
+                loadPendingReplies();
+            } catch (error) {
+                alert('Error marking reply as used: ' + error.message);
+            }
+        }
+        
+        // Load persona
+        async function loadPersona() {
+            try {
+                const response = await fetch('/api/persona/explanation');
+                const text = await response.text();
+                document.getElementById('persona-display').textContent = text;
+            } catch (error) {
+                document.getElementById('persona-display').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Post actions
+        async function editPost(postId) {
+            const newContent = prompt('Enter new content:');
+            if (!newContent) return;
+            
+            try {
+                await fetch(`/api/content-machine/posts/${postId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: newContent })
+                });
+                loadScheduledPosts();
+            } catch (error) {
+                alert('Error updating post: ' + error.message);
+            }
+        }
+        
+        async function approvePost(postId) {
+            try {
+                await fetch(`/api/content-machine/posts/${postId}/approve`, { method: 'POST' });
+                loadScheduledPosts();
+                loadDashboard();
+            } catch (error) {
+                alert('Error approving post: ' + error.message);
+            }
+        }
+        
+        async function deletePost(postId) {
+            if (!confirm('Delete this post?')) return;
+            
+            try {
+                await fetch(`/api/content-machine/posts/${postId}`, { method: 'DELETE' });
+                loadScheduledPosts();
+            } catch (error) {
+                alert('Error deleting post: ' + error.message);
+            }
+        }
+        
+        // Complete action
+        async function completeAction(actionType, actionId) {
+            try {
+                await fetch('/api/daily-actions/track', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action_type: actionType, action_data: { id: actionId } })
+                });
+                loadDashboard();
+            } catch (error) {
+                alert('Error tracking action: ' + error.message);
+            }
+        }
+        
+        // Load dashboard on page load
+        window.onload = () => {
+            showSection('dashboard');
+        };
+    </script>
+</body>
+</html>
+
