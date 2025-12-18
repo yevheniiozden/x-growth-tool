@@ -639,14 +639,16 @@ Format as JSON with:
             return {
                 "success": True,
                 "keywords": keywords,
+                "ai_analysis": analysis.get("summary", analysis_text) if isinstance(analysis, dict) else analysis_text,
                 "analysis": analysis,
-                "suggestions": analysis.get("suggestions", [])
+                "suggestions": analysis.get("suggestions", []) if isinstance(analysis, dict) else []
             }
         except Exception as e:
             print(f"AI analysis error: {e}")
             return {
                 "success": True,
                 "keywords": keywords,
+                "ai_analysis": "Keywords accepted (AI analysis unavailable)",
                 "analysis": {"summary": "Keywords accepted"},
                 "suggestions": []
             }
