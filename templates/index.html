@@ -572,6 +572,195 @@
             font-size: 10px;
             font-weight: 600;
         }
+        
+        /* User Search Dropdown */
+        .user-search-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-top: 0.5rem;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: var(--shadow);
+        }
+        
+        .user-search-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .user-search-item:last-child {
+            border-bottom: none;
+        }
+        
+        .user-search-item:hover {
+            background: var(--bg-tertiary);
+        }
+        
+        .selected-user-preview {
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .verified-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 50%;
+            color: white;
+            font-size: 12px;
+        }
+        
+        /* X-like Post Styles */
+        .x-post-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 1rem;
+            transition: all 0.2s ease;
+        }
+        
+        .x-post-card:hover {
+            background: var(--bg-tertiary);
+            border-color: rgba(148, 163, 184, 0.2);
+        }
+        
+        .x-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+        
+        .x-post-content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .x-post-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .x-username {
+            font-weight: 700;
+            color: var(--text-primary);
+            font-size: 15px;
+        }
+        
+        .x-handle {
+            color: var(--text-muted);
+            font-size: 15px;
+        }
+        
+        .x-post-text {
+            color: var(--text-primary);
+            font-size: 15px;
+            line-height: 1.5;
+            margin-bottom: 0.75rem;
+            word-wrap: break-word;
+        }
+        
+        .x-post-engagement {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 0.75rem;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        
+        .x-engagement-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+        
+        .x-engagement-item:hover {
+            color: var(--primary);
+        }
+        
+        /* X-like Profile Styles */
+        .x-profile-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .x-profile-header {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .x-profile-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+        
+        .x-profile-info {
+            flex: 1;
+        }
+        
+        .x-profile-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .x-profile-handle {
+            color: var(--text-muted);
+            font-size: 15px;
+            margin-bottom: 0.75rem;
+        }
+        
+        .x-profile-bio {
+            color: var(--text-primary);
+            font-size: 15px;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+        
+        .x-profile-stats {
+            display: flex;
+            gap: 1.5rem;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        .x-profile-stat {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
     </style>
 </head>
 <body>
@@ -870,10 +1059,23 @@
                     </p>
                     <div class="form-group">
                         <label class="form-label">Your X Username</label>
-                        <input type="text" id="x-username-input" class="form-input" 
-                               placeholder="your_username (without @)" autofocus>
+                        <div style="position: relative;">
+                            <input type="text" id="x-username-input" class="form-input" 
+                                   placeholder="your_username (without @)" autofocus autocomplete="off">
+                            <div id="user-search-results" class="user-search-dropdown hidden"></div>
+                        </div>
+                        <div id="selected-user-preview" class="selected-user-preview hidden" style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 12px; display: flex; align-items: center; gap: 1rem;">
+                            <img id="selected-user-avatar" src="" alt="" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary);">
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span id="selected-user-name" style="font-weight: 600; color: var(--text-primary);"></span>
+                                    <span id="selected-user-verified" class="verified-badge hidden" style="color: var(--primary); font-weight: bold;">✓</span>
+                                </div>
+                                <div id="selected-user-handle" style="color: var(--text-secondary); font-size: 14px;"></div>
+                            </div>
+                        </div>
                         <p style="color: var(--text-muted); font-size: 12px; margin-top: 0.5rem;">
-                            Enter your X username without the @ symbol
+                            Start typing your X username to search and select your account
                         </p>
                     </div>
                     <button class="btn btn-primary" onclick="connectXAccount()" style="width: 100%;">
@@ -991,10 +1193,48 @@
             }
             
             btn.disabled = true;
-            btn.textContent = 'Saving...';
+            btn.textContent = 'Analyzing...';
             errorDiv.innerHTML = '';
             
             try {
+                // First analyze keywords with AI
+                const analyzeResponse = await fetch('/api/onboarding/analyze-keywords', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ keywords: input })
+                });
+                
+                const analyzeData = await analyzeResponse.json();
+                
+                if (!analyzeData.success) {
+                    errorDiv.innerHTML = `<div class="alert alert-error">${analyzeData.error || 'Analysis failed'}</div>`;
+                    btn.disabled = false;
+                    btn.textContent = 'Continue';
+                    return;
+                }
+                
+                // Show analysis results if available
+                if (analyzeData.analysis && analyzeData.analysis.summary) {
+                    const analysisDiv = document.createElement('div');
+                    analysisDiv.className = 'alert alert-info';
+                    analysisDiv.style.marginTop = '1rem';
+                    analysisDiv.innerHTML = `
+                        <div style="margin-bottom: 0.5rem;"><strong>AI Analysis:</strong></div>
+                        <div>${analyzeData.analysis.summary}</div>
+                        ${analyzeData.suggestions && analyzeData.suggestions.length > 0 ? `
+                        <div style="margin-top: 0.5rem;">
+                            <strong>Suggestions:</strong>
+                            <ul style="margin-top: 0.25rem; padding-left: 1.5rem;">
+                                ${analyzeData.suggestions.map(s => `<li>${s}</li>`).join('')}
+                            </ul>
+                        </div>
+                        ` : ''}
+                    `;
+                    errorDiv.appendChild(analysisDiv);
+                }
+                
+                // Save keywords
+                btn.textContent = 'Saving...';
                 const response = await fetch('/api/onboarding/keywords', {
                     method: 'POST',
                     headers: getAuthHeaders(),
@@ -1064,11 +1304,12 @@
         
         
         async function connectXAccount() {
-            const username = document.getElementById('x-username-input').value.trim().replace('@', '');
+            // Use selected user if available, otherwise use input value
+            const username = selectedUser ? selectedUser.username : document.getElementById('x-username-input').value.trim().replace('@', '');
             const errorDiv = document.getElementById('step1-error');
             
             if (!username) {
-                errorDiv.innerHTML = '<div class="alert alert-error">Please enter your X username</div>';
+                errorDiv.innerHTML = '<div class="alert alert-error">Please enter or select your X username</div>';
                 return;
             }
             
@@ -1512,6 +1753,22 @@
             }
         }
 
+        // Utility functions
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+        
         // Interactive Onboarding Functions
         let currentOnboardingPhase = 1;
         let currentOnboardingPost = null;
@@ -1584,15 +1841,39 @@
                     if (phaseElement && postContentElement) {
                         phaseElement.classList.remove('hidden');
                         
-                        // Display post
+                        // Display post in X-like format
+                        const author = data.post.author || {};
+                        const profileImage = author.profile_image_url || data.post.author_profile_image || '';
+                        const authorName = author.name || data.post.author_name || data.post.author_username || 'Unknown';
+                        const authorUsername = author.username || data.post.author_username || 'unknown';
+                        const verified = author.verified || data.post.author_verified || false;
+                        
                         postContentElement.innerHTML = `
-                            <div class="post-content">
-                                <div class="post-text">${data.post.text}</div>
-                                <div class="post-meta">
-                                    <span>@${data.post.author_username || 'unknown'}</span>
-                                    <span>❤️ ${data.post.likes || 0}</span>
-                                    <span>💬 ${data.post.replies || 0}</span>
-                                    ${data.post.retweets ? `<span>🔄 ${data.post.retweets}</span>` : ''}
+                            <div class="x-post-card">
+                                <img class="x-avatar" src="${profileImage || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23334155\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%2394a3b8\' font-size=\'20\'%3E@%3C/text%3E%3C/svg%3E'}" alt="${authorName}">
+                                <div class="x-post-content">
+                                    <div class="x-post-header">
+                                        <span class="x-username">${authorName}</span>
+                                        ${verified ? '<span class="verified-badge" style="display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: var(--primary); border-radius: 50%; color: white; font-size: 10px;">✓</span>' : ''}
+                                        <span class="x-handle">@${authorUsername}</span>
+                                    </div>
+                                    <div class="x-post-text">${escapeHtml(data.post.text || '')}</div>
+                                    <div class="x-post-engagement">
+                                        <span class="x-engagement-item">
+                                            <span>❤️</span>
+                                            <span>${formatNumber(data.post.likes || 0)}</span>
+                                        </span>
+                                        <span class="x-engagement-item">
+                                            <span>💬</span>
+                                            <span>${formatNumber(data.post.replies || 0)}</span>
+                                        </span>
+                                        ${data.post.retweets ? `
+                                        <span class="x-engagement-item">
+                                            <span>🔄</span>
+                                            <span>${formatNumber(data.post.retweets)}</span>
+                                        </span>
+                                        ` : ''}
+                                    </div>
                                 </div>
                             </div>
                         `;
@@ -1623,42 +1904,85 @@
                     if (phaseElement && profileContentElement && feedElement) {
                         phaseElement.classList.remove('hidden');
                         
-                        // Display profile (handle placeholder accounts from API errors)
+                        // Display profile in X-like format
                         const isPlaceholder = data.placeholder || false;
+                        const profileImage = data.account.profile_image_url || '';
+                        const accountName = data.account.name || data.account.username || 'Unknown';
+                        const accountUsername = data.account.username || 'unknown';
+                        const verified = data.account.verified || false;
+                        const description = data.account.description || 'No description available';
+                        const followers = data.account.followers || data.account.followers_count || 0;
+                        const following = data.account.following || data.account.following_count || 0;
+                        const tweets = data.account.tweets || data.account.tweet_count || data.account.statusesCount || 0;
+                        
                         profileContentElement.innerHTML = `
-                            <div class="profile-header">
-                                <div style="width: 64px; height: 64px; border-radius: 50%; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: 24px;">
-                                    ${data.account.profile_image_url ? `<img src="${data.account.profile_image_url}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">` : '@'}
-                                </div>
-                                <div class="profile-info" style="flex: 1;">
-                                    <h3>
-                                        ${data.account.name || data.account.username}
-                                        ${data.account.verified ? '<span style="color: var(--primary);">✓</span>' : ''}
-                                    </h3>
-                                    <p>@${data.account.username}</p>
-                                    <p style="margin-top: 0.5rem; ${isPlaceholder ? 'color: var(--text-muted); font-style: italic;' : ''}">
-                                        ${data.account.description || 'No description'}
-                                    </p>
-                                    ${!isPlaceholder ? `
-                                    <div class="profile-stats">
-                                        <span>👥 ${(data.account.followers || 0).toLocaleString()} followers</span>
-                                        <span>📊 ${(data.account.tweets || 0).toLocaleString()} tweets</span>
+                            <div class="x-profile-card">
+                                <div class="x-profile-header">
+                                    <img class="x-profile-avatar" src="${profileImage || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'80\'%3E%3Crect width=\'80\' height=\'80\' fill=\'%23334155\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%2394a3b8\' font-size=\'32\'%3E@%3C/text%3E%3C/svg%3E'}" alt="${accountName}">
+                                    <div class="x-profile-info">
+                                        <div class="x-profile-name">
+                                            ${accountName}
+                                            ${verified ? '<span class="verified-badge" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: var(--primary); border-radius: 50%; color: white; font-size: 12px;">✓</span>' : ''}
+                                        </div>
+                                        <div class="x-profile-handle">@${accountUsername}</div>
+                                        <div class="x-profile-bio" style="${isPlaceholder ? 'color: var(--text-muted); font-style: italic;' : ''}">${escapeHtml(description)}</div>
+                                        ${!isPlaceholder ? `
+                                        <div class="x-profile-stats">
+                                            <div class="x-profile-stat">
+                                                <span style="font-weight: 600;">${formatNumber(following)}</span>
+                                                <span>Following</span>
+                                            </div>
+                                            <div class="x-profile-stat">
+                                                <span style="font-weight: 600;">${formatNumber(followers)}</span>
+                                                <span>Followers</span>
+                                            </div>
+                                            <div class="x-profile-stat">
+                                                <span style="font-weight: 600;">${formatNumber(tweets)}</span>
+                                                <span>Tweets</span>
+                                            </div>
+                                        </div>
+                                        ` : ''}
                                     </div>
-                                    ` : ''}
                                 </div>
                             </div>
                         `;
                         
-                        // Display feed
+                        // Display feed in X-like format
                         if (data.feed && data.feed.length > 0) {
-                            feedElement.innerHTML = data.feed.map(post => `
-                                <div class="feed-post">
-                                    <div class="feed-post-text">${post.text}</div>
-                                    <div class="feed-post-meta">
-                                        ❤️ ${post.likes || 0} • 💬 ${post.replies || 0} • 🔄 ${post.retweets || 0}
+                            feedElement.innerHTML = data.feed.map(post => {
+                                const postAuthor = post.author || {};
+                                const authorName = postAuthor.name || post.author_name || post.author_username || 'Unknown';
+                                const authorUsername = postAuthor.username || post.author_username || 'unknown';
+                                const authorImage = postAuthor.profile_image_url || post.author_profile_image || '';
+                                return `
+                                    <div class="x-post-card" style="margin-bottom: 0.5rem;">
+                                        <img class="x-avatar" src="${authorImage || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23334155\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%2394a3b8\' font-size=\'20\'%3E@%3C/text%3E%3C/svg%3E'}" alt="${authorName}">
+                                        <div class="x-post-content">
+                                            <div class="x-post-header">
+                                                <span class="x-username">${authorName}</span>
+                                                <span class="x-handle">@${authorUsername}</span>
+                                            </div>
+                                            <div class="x-post-text">${escapeHtml(post.text || '')}</div>
+                                            <div class="x-post-engagement">
+                                                <span class="x-engagement-item">
+                                                    <span>❤️</span>
+                                                    <span>${formatNumber(post.likes || 0)}</span>
+                                                </span>
+                                                <span class="x-engagement-item">
+                                                    <span>💬</span>
+                                                    <span>${formatNumber(post.replies || 0)}</span>
+                                                </span>
+                                                ${post.retweets ? `
+                                                <span class="x-engagement-item">
+                                                    <span>🔄</span>
+                                                    <span>${formatNumber(post.retweets)}</span>
+                                                </span>
+                                                ` : ''}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            `).join('');
+                                `;
+                            }).join('');
                         } else {
                             feedElement.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No posts available</p>';
                         }

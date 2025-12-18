@@ -438,6 +438,59 @@ async def get_onboarding_step_endpoint(request: Request):
     return get_onboarding_step(user.get("user_id"))
 
 
+@app.get("/api/onboarding/search-users")
+async def search_users_endpoint(request: Request, query: str):
+    """Search for users by username for autocomplete"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if not query or len(query) < 2:
+        return {"users": []}
+    
+    from services.x_api import client
+    if not client:
+        return {"users": []}
+    
+    try:
+        clean_query = query.replace('@', '').strip()
+        
+        # Try direct user lookup first
+        user_obj = client.get_user(username=clean_query)
+        
+        if user_obj:
+            # Handle both tweepy and HTTP client responses
+            if hasattr(user_obj, 'data') and user_obj.data:
+                user_data = user_obj.data
+                return {
+                    "users": [{
+                        "id": str(user_data.id),
+                        "username": user_data.username,
+                        "name": getattr(user_data, 'name', user_data.username),
+                        "profile_image_url": getattr(user_data, 'profile_image_url', ''),
+                        "verified": getattr(user_data, 'verified', False)
+                    }]
+                }
+            elif hasattr(user_obj, 'id'):
+                # HTTP client returns user directly
+                return {
+                    "users": [{
+                        "id": str(user_obj.id),
+                        "username": getattr(user_obj, 'username', clean_query),
+                        "name": getattr(user_obj, 'name', clean_query),
+                        "profile_image_url": getattr(user_obj, 'profile_image_url', ''),
+                        "verified": getattr(user_obj, 'verified', False)
+                    }]
+                }
+        
+        return {"users": []}
+    except Exception as e:
+        print(f"Error searching users: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"users": []}
+
+
 @app.post("/api/onboarding/connect-x")
 async def connect_x_endpoint(request: Request):
     """Step 1: Connect X account"""
@@ -455,6 +508,95 @@ async def connect_x_endpoint(request: Request):
         from onboarding_flow import connect_x_account
         result = connect_x_account(user.get("user_id"), x_username)
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/analyze-keywords")
+async def analyze_keywords_endpoint(request: Request):
+    """Analyze keywords with AI before saving"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        data = await request.json()
+        keywords_text = data.get("keywords", "").strip()
+        
+        if not keywords_text:
+            raise HTTPException(status_code=400, detail="Keywords required")
+        
+        # Parse keywords
+        keywords = [k.strip() for k in keywords_text.replace('\n', ',').split(',') if k.strip()]
+        
+        if len(keywords) < 3:
+            return {
+                "success": False,
+                "error": "Please provide at least 3 keywords",
+                "suggestions": []
+            }
+        
+        # Analyze keywords with AI
+        from services.ai_service import client as ai_client
+        if not ai_client:
+            return {
+                "success": True,
+                "keywords": keywords,
+                "analysis": "Keywords accepted",
+                "suggestions": []
+            }
+        
+        keywords_str = ", ".join(keywords)
+        prompt = f"""Analyze these keywords for X/Twitter content discovery: {keywords_str}
+
+Provide:
+1. Relevance score (1-10) for each keyword
+2. Suggestions for better or more specific keywords if needed
+3. Any overlapping or redundant keywords
+
+Format as JSON with:
+- "relevance": {{"keyword": score}}
+- "suggestions": ["suggestion1", "suggestion2"]
+- "overlapping": ["keyword1", "keyword2"] if any overlap
+- "summary": "brief analysis"
+"""
+        
+        try:
+            response = ai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert at analyzing keywords for social media content discovery. Provide concise, actionable feedback."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=500
+            )
+            
+            analysis_text = response.choices[0].message.content
+            
+            # Try to parse JSON from response
+            import json
+            import re
+            json_match = re.search(r'\{.*\}', analysis_text, re.DOTALL)
+            if json_match:
+                analysis = json.loads(json_match.group())
+            else:
+                analysis = {"summary": analysis_text}
+            
+            return {
+                "success": True,
+                "keywords": keywords,
+                "analysis": analysis,
+                "suggestions": analysis.get("suggestions", [])
+            }
+        except Exception as e:
+            print(f"AI analysis error: {e}")
+            return {
+                "success": True,
+                "keywords": keywords,
+                "analysis": {"summary": "Keywords accepted"},
+                "suggestions": []
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
