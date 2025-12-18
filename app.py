@@ -476,6 +476,32 @@ async def get_onboarding_step_endpoint(request: Request):
     return get_onboarding_step(user.get("user_id"))
 
 
+# Simple cache for user searches (30 second TTL)
+_user_search_cache = {}
+_cache_ttl = 30  # seconds
+
+def _get_cached_user_search(query: str):
+    """Get cached user search result if available and not expired"""
+    cache_key = query.lower().strip()
+    if cache_key in _user_search_cache:
+        result, timestamp = _user_search_cache[cache_key]
+        if time() - timestamp < _cache_ttl:
+            return result
+        else:
+            del _user_search_cache[cache_key]
+    return None
+
+def _cache_user_search(query: str, result: dict):
+    """Cache user search result"""
+    cache_key = query.lower().strip()
+    _user_search_cache[cache_key] = (result, time())
+    # Clean old entries (keep cache size reasonable)
+    if len(_user_search_cache) > 100:
+        current_time = time()
+        expired_keys = [k for k, (_, ts) in _user_search_cache.items() if current_time - ts >= _cache_ttl]
+        for k in expired_keys:
+            del _user_search_cache[k]
+
 @app.get("/api/onboarding/search-users")
 async def search_users_endpoint(request: Request, query: str):
     """Search for users by username for autocomplete"""
@@ -483,8 +509,13 @@ async def search_users_endpoint(request: Request, query: str):
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    if not query or len(query) < 2:
+    if not query or len(query) < 1:  # Reduced from 2 to 1 for faster feedback
         return {"users": []}
+    
+    # Check cache first
+    cached_result = _get_cached_user_search(query)
+    if cached_result is not None:
+        return cached_result
     
     from services.x_api import client
     if not client:
@@ -536,12 +567,16 @@ async def search_users_endpoint(request: Request, query: str):
                     }]
                 }
         
-        return {"users": []}
-    except Exception as e:
-        print(f"Error searching users: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"users": []}
+              result = {"users": []}
+              _cache_user_search(query, result)
+              return result
+          except Exception as e:
+              print(f"Error searching users: {e}")
+              import traceback
+              traceback.print_exc()
+              result = {"users": []}
+              _cache_user_search(query, result)
+              return result
 
 
 @app.post("/api/onboarding/connect-x")

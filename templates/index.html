@@ -2565,9 +2565,49 @@
                         phaseElement.classList.remove('hidden');
                         
                         // Try to embed post using oEmbed if URL is available
-                        if (data.post.url) {
+                        if (data.post.url && data.post.url.includes('twitter.com') && data.post.url.includes('/status/')) {
                             // Show loading state
                             postContentElement.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading post...</div>';
+                            
+                            // Ensure Twitter widgets script is loaded FIRST
+                            const ensureTwitterScript = () => {
+                                return new Promise((resolve, reject) => {
+                                    if (window.twttr && window.twttr.widgets) {
+                                        resolve();
+                                        return;
+                                    }
+                                    
+                                    if (document.getElementById('twitter-wjs')) {
+                                        // Script is loading, wait for it
+                                        let checkCount = 0;
+                                        const checkInterval = setInterval(() => {
+                                            if (window.twttr && window.twttr.widgets) {
+                                                clearInterval(checkInterval);
+                                                resolve();
+                                            } else if (checkCount++ > 20) {
+                                                clearInterval(checkInterval);
+                                                reject(new Error('Twitter widgets timeout'));
+                                            }
+                                        }, 200);
+                                    } else {
+                                        // Load script
+                                        const script = document.createElement('script');
+                                        script.src = 'https://platform.twitter.com/widgets.js';
+                                        script.charset = 'utf-8';
+                                        script.async = true;
+                                        script.id = 'twitter-wjs';
+                                        script.onload = () => {
+                                            if (window.twttr && window.twttr.ready) {
+                                                window.twttr.ready(resolve);
+                                            } else {
+                                                setTimeout(resolve, 1000);
+                                            }
+                                        };
+                                        script.onerror = () => reject(new Error('Failed to load Twitter widgets'));
+                                        document.head.appendChild(script);
+                                    }
+                                });
+                            };
                             
                             // Fetch oEmbed HTML
                             fetch(`/api/onboarding/oembed?url=${encodeURIComponent(data.post.url)}`, {
@@ -2579,7 +2619,7 @@
                                 }
                                 return response.json();
                             })
-                            .then(oembedData => {
+                            .then(async oembedData => {
                                 if (oembedData.success && oembedData.html) {
                                     // Use embedded post - wrap in container for proper display
                                     postContentElement.innerHTML = `
@@ -2590,78 +2630,60 @@
                                         </div>
                                     `;
                                     
-                                    // Function to load Twitter widgets with retry
-                                    let retryCount = 0;
-                                    const maxRetries = 15;
-                                    const loadTwitterWidgets = () => {
-                                        if (window.twttr && window.twttr.widgets) {
-                                            // Find the blockquote in the container
-                                            const blockquote = postContentElement.querySelector('blockquote.twitter-tweet');
-                                            if (blockquote) {
-                                                window.twttr.widgets.load(blockquote).then(() => {
-                                                    console.log('Twitter widget loaded successfully');
-                                                }).catch(err => {
-                                                    console.error('Error loading widget:', err);
-                                                    if (retryCount < maxRetries) {
-                                                        retryCount++;
-                                                        setTimeout(loadTwitterWidgets, 800);
-                                                    } else {
-                                                        console.warn('Max retries reached, using custom post');
-                                                        renderCustomPost(postContentElement, data.post);
-                                                    }
-                                                });
-                                            } else {
-                                                // If no blockquote found, try loading entire container
-                                                window.twttr.widgets.load(postContentElement).catch(() => {
-                                                    if (retryCount < maxRetries) {
-                                                        retryCount++;
-                                                        setTimeout(loadTwitterWidgets, 800);
-                                                    } else {
-                                                        renderCustomPost(postContentElement, data.post);
-                                                    }
-                                                });
-                                            }
-                                        } else {
-                                            // Wait a bit and try again
-                                            if (retryCount < maxRetries) {
-                                                retryCount++;
-                                                setTimeout(loadTwitterWidgets, 400);
-                                            } else {
-                                                console.error('Twitter widgets not available after retries');
-                                                renderCustomPost(postContentElement, data.post);
-                                            }
-                                        }
-                                    };
-                                    
-                                    // Ensure Twitter widgets script is loaded
-                                    if (!document.getElementById('twitter-wjs')) {
-                                        const script = document.createElement('script');
-                                        script.src = 'https://platform.twitter.com/widgets.js';
-                                        script.charset = 'utf-8';
-                                        script.async = true;
-                                        script.id = 'twitter-wjs';
-                                        document.head.appendChild(script);
+                                    // Ensure Twitter widgets are ready, then load
+                                    try {
+                                        await ensureTwitterScript();
                                         
-                                        // Wait for script to load, then initialize
-                                        script.onload = function() {
-                                            // Wait for twttr to be ready
-                                            if (window.twttr && window.twttr.ready) {
-                                                window.twttr.ready(loadTwitterWidgets);
+                                        // Function to load Twitter widgets with retry
+                                        let retryCount = 0;
+                                        const maxRetries = 5;  // Reduced from 15 to 5 for faster fallback
+                                        const loadTwitterWidgets = () => {
+                                            if (window.twttr && window.twttr.widgets) {
+                                                // Find the blockquote in the container
+                                                const blockquote = postContentElement.querySelector('blockquote.twitter-tweet');
+                                                if (blockquote) {
+                                                    window.twttr.widgets.load(blockquote).then(() => {
+                                                        console.log('Twitter widget loaded successfully');
+                                                    }).catch(err => {
+                                                        console.error('Error loading widget:', err);
+                                                        if (retryCount < maxRetries) {
+                                                            retryCount++;
+                                                            setTimeout(loadTwitterWidgets, 1000 * retryCount); // Exponential backoff
+                                                        } else {
+                                                            console.warn('Max retries reached, using custom post');
+                                                            renderCustomPost(postContentElement, data.post);
+                                                        }
+                                                    });
+                                                } else {
+                                                    // If no blockquote found, try loading entire container
+                                                    window.twttr.widgets.load(postContentElement).then(() => {
+                                                        console.log('Twitter widget loaded from container');
+                                                    }).catch(() => {
+                                                        if (retryCount < maxRetries) {
+                                                            retryCount++;
+                                                            setTimeout(loadTwitterWidgets, 1000 * retryCount);
+                                                        } else {
+                                                            renderCustomPost(postContentElement, data.post);
+                                                        }
+                                                    });
+                                                }
                                             } else {
-                                                setTimeout(loadTwitterWidgets, 2000);
+                                                // Wait a bit and try again
+                                                if (retryCount < maxRetries) {
+                                                    retryCount++;
+                                                    setTimeout(loadTwitterWidgets, 500);
+                                                } else {
+                                                    console.error('Twitter widgets not available after retries');
+                                                    renderCustomPost(postContentElement, data.post);
+                                                }
                                             }
                                         };
-                                        script.onerror = function() {
-                                            console.error('Failed to load Twitter widgets script');
-                                            renderCustomPost(postContentElement, data.post);
-                                        };
-                                    } else {
-                                        // Script already loaded, initialize
-                                        if (window.twttr && window.twttr.ready) {
-                                            window.twttr.ready(loadTwitterWidgets);
-                                        } else {
-                                            setTimeout(loadTwitterWidgets, 1000);
-                                        }
+                                        
+                                        // Start loading widgets
+                                        loadTwitterWidgets();
+                                    } catch (error) {
+                                        console.error('Error ensuring Twitter script:', error);
+                                        renderCustomPost(postContentElement, data.post);
                                     }
                                 } else {
                                     // Fallback to custom design
@@ -2674,7 +2696,8 @@
                                 renderCustomPost(postContentElement, data.post);
                             });
                         } else {
-                            // No URL available, use custom design
+                            // No valid URL available, use custom design
+                            console.warn('Post missing valid URL:', data.post.url);
                             renderCustomPost(postContentElement, data.post);
                         }
                     }

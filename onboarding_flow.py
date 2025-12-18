@@ -613,51 +613,69 @@ def complete_interactive_onboarding(user_id: str) -> Dict[str, Any]:
 
 
 def _prepare_onboarding_data(user_id: str) -> None:
-    """Prepare and cache onboarding data (accounts and posts)"""
-    users = load_users()
-    user = users.get(user_id)
-    keywords = user.get("keywords", [])
-    keyword_relevance = user.get("keyword_relevance", {})
-    
-    user_dir = get_user_data_dir(user_id)
-    
-    # Discover and cache accounts (handle API errors gracefully)
+    """Prepare and cache onboarding data (accounts and posts) - runs as background task"""
     try:
-        accounts = discover_accounts_for_user(keywords, keyword_relevance, user_id)
-        if accounts:
-            cache_file = user_dir / "onboarding_accounts.json"
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                json.dump(accounts, f, indent=2, ensure_ascii=False)
-        else:
-            # If no accounts found (API error), create empty cache to allow onboarding to proceed
-            cache_file = user_dir / "onboarding_accounts.json"
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                json.dump([], f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error preparing account data: {e}")
-        # Create empty cache to allow onboarding to proceed
-        cache_file = user_dir / "onboarding_accounts.json"
-        with open(cache_file, 'w', encoding='utf-8') as f:
-            json.dump([], f, indent=2, ensure_ascii=False)
-    
-    # Fetch and cache posts for each phase (handle API errors gracefully)
-    for phase, post_type, count in [(1, 'like', 20), (2, 'reply', 10), (3, 'engage', 20)]:
+        users = load_users()
+        user = users.get(user_id)
+        if not user:
+            print(f"User {user_id} not found for data preparation")
+            return
+        
+        keywords = user.get("keywords", [])
+        keyword_relevance = user.get("keyword_relevance", {})
+        
+        user_dir = get_user_data_dir(user_id)
+        
+        # Discover and cache accounts (handle API errors gracefully)
         try:
-            posts = get_posts_for_onboarding(keywords, keyword_relevance, post_type, count)
-            cache_file = user_dir / f"onboarding_posts_phase{phase}.json"
-            if posts:
+            accounts = discover_accounts_for_user(keywords, keyword_relevance, user_id)
+            if accounts:
+                cache_file = user_dir / "onboarding_accounts.json"
                 with open(cache_file, 'w', encoding='utf-8') as f:
-                    json.dump(posts, f, indent=2, ensure_ascii=False)
+                    json.dump(accounts, f, indent=2, ensure_ascii=False)
             else:
-                # If no posts found (API error), create empty cache to allow onboarding to proceed
+                # If no accounts found (API error), create empty cache to allow onboarding to proceed
+                cache_file = user_dir / "onboarding_accounts.json"
                 with open(cache_file, 'w', encoding='utf-8') as f:
                     json.dump([], f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"Error preparing posts for phase {phase}: {e}")
+            print(f"Error preparing account data: {e}")
             # Create empty cache to allow onboarding to proceed
-            cache_file = user_dir / f"onboarding_posts_phase{phase}.json"
+            cache_file = user_dir / "onboarding_accounts.json"
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump([], f, indent=2, ensure_ascii=False)
+        
+        # Fetch and cache posts for each phase (handle API errors gracefully)
+        for phase, post_type, count in [(1, 'like', 20), (2, 'reply', 10), (3, 'engage', 20)]:
+            try:
+                posts = get_posts_for_onboarding(keywords, keyword_relevance, post_type, count)
+                cache_file = user_dir / f"onboarding_posts_phase{phase}.json"
+                if posts:
+                    with open(cache_file, 'w', encoding='utf-8') as f:
+                        json.dump(posts, f, indent=2, ensure_ascii=False)
+                else:
+                    # If no posts found (API error), create empty cache to allow onboarding to proceed
+                    with open(cache_file, 'w', encoding='utf-8') as f:
+                        json.dump([], f, indent=2, ensure_ascii=False)
+            except Exception as e:
+                print(f"Error preparing posts for phase {phase}: {e}")
+                # Create empty cache to allow onboarding to proceed
+                cache_file = user_dir / f"onboarding_posts_phase{phase}.json"
+                with open(cache_file, 'w', encoding='utf-8') as f:
+                    json.dump([], f, indent=2, ensure_ascii=False)
+        
+        # Mark data preparation as complete
+        users = load_users()
+        if user_id in users:
+            interactive = users[user_id].get("interactive_onboarding", {})
+            interactive["data_preparing"] = False
+            users[user_id]["interactive_onboarding"] = interactive
+            save_users(users)
+            print(f"Data preparation completed for user {user_id}")
+    except Exception as e:
+        print(f"Error in background data preparation: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def _keyword_to_topic(keyword: str) -> Optional[str]:

@@ -250,11 +250,11 @@ def get_posts_for_onboarding(
         # Filter out retweets AND replies - only show original posts
         query = " OR ".join(query_parts) + " -is:retweet -is:reply lang:en"
         
-        # Search for recent tweets
+        # Search for recent tweets - OPTIMIZED: reduced max_results to save API credits
         try:
             tweets = client.search_recent_tweets(
                 query=query,
-                max_results=100,
+                max_results=60,  # Reduced from 100 to 60 to save API credits while still getting enough posts
                 tweet_fields=['author_id', 'public_metrics', 'created_at', 'text', 'conversation_id'],
                 user_fields=['username', 'name']
             )
@@ -275,28 +275,42 @@ def get_posts_for_onboarding(
         tweet_list = list(tweets.data)
         for tweet in tweet_list:
             author_id = tweet.author_id if hasattr(tweet, 'author_id') else (tweet.get('author_id') if isinstance(tweet, dict) else None)
-            if author_id and author_id not in author_ids_to_fetch:
-                author_ids_to_fetch.append(author_id)
+            if author_id and str(author_id) not in author_ids_to_fetch:
+                author_ids_to_fetch.append(str(author_id))
         
-        # Fetch usernames in bulk if we have author IDs
+        # Fetch usernames in bulk if we have author IDs - CRITICAL for embedding
         author_usernames = {}
+        author_data = {}  # Store full author data for later use
         if author_ids_to_fetch:
             try:
-                users_response = client.get_users(ids=author_ids_to_fetch)
-                users_data = None
-                if hasattr(users_response, 'data'):
-                    users_data = users_response.data
-                elif isinstance(users_response, list):
-                    users_data = users_response
-                
-                if users_data:
-                    for user in users_data:
-                        user_id = user.id if hasattr(user, 'id') else (user.get('id') if isinstance(user, dict) else None)
-                        username = user.username if hasattr(user, 'username') else (user.get('username') if isinstance(user, dict) else None)
-                        if user_id and username:
-                            author_usernames[str(user_id)] = username
+                # Batch fetch users (limit to 100 per batch to avoid API limits)
+                for i in range(0, len(author_ids_to_fetch), 100):
+                    batch_ids = author_ids_to_fetch[i:i+100]
+                    users_response = client.get_users(ids=batch_ids)
+                    users_data = None
+                    if hasattr(users_response, 'data'):
+                        users_data = users_response.data
+                    elif isinstance(users_response, list):
+                        users_data = users_response
+                    elif hasattr(users_response, 'users'):
+                        users_data = users_response.users
+                    
+                    if users_data:
+                        for user in users_data:
+                            user_id = user.id if hasattr(user, 'id') else (user.get('id') if isinstance(user, dict) else None)
+                            username = user.username if hasattr(user, 'username') else (user.get('username') if isinstance(user, dict) else None)
+                            if user_id and username:
+                                author_usernames[str(user_id)] = username
+                                author_data[str(user_id)] = {
+                                    'username': username,
+                                    'name': user.name if hasattr(user, 'name') else (user.get('name') if isinstance(user, dict) else username),
+                                    'profile_image': user.profile_image_url if hasattr(user, 'profile_image_url') else (user.get('profile_image_url') or user.get('profilePicture', '')),
+                                    'verified': user.verified if hasattr(user, 'verified') else (user.get('verified') or user.get('isBlueVerified', False))
+                                }
             except Exception as e:
                 print(f"Error fetching author usernames: {e}")
+                import traceback
+                traceback.print_exc()
         
         # Score and filter posts
         for tweet in tweet_list:
@@ -340,23 +354,41 @@ def get_posts_for_onboarding(
             if total_engagement < min_engagement:
                 continue
             
-            # Get post URL for embedding
+            # Get post URL for embedding - CRITICAL: ensure we have valid username
             tweet_id = tweet.id if hasattr(tweet, 'id') else (tweet.get('id') if isinstance(tweet, dict) else None)
-            author_username = getattr(tweet, 'author_username', 'unknown') or (tweet.get('author_username') if isinstance(tweet, dict) else 'unknown')
+            author_id = tweet.author_id if hasattr(tweet, 'author_id') else (tweet.get('author_id') if isinstance(tweet, dict) else None)
             
-            post_url = None
-            if tweet_id and author_username:
-                post_url = f"https://twitter.com/{author_username}/status/{tweet_id}"
+            # Get username from our fetched data - this is the key fix
+            author_username = 'unknown'
+            author_name = 'Unknown'
+            author_profile_image = ''
+            author_verified = False
+            
+            if author_id and str(author_id) in author_usernames:
+                author_username = author_usernames[str(author_id)]
+                if str(author_id) in author_data:
+                    author_name = author_data[str(author_id)].get('name', author_username)
+                    author_profile_image = author_data[str(author_id)].get('profile_image', '')
+                    author_verified = author_data[str(author_id)].get('verified', False)
+            
+            # Skip posts without valid usernames - they can't be embedded
+            if author_username == 'unknown' or not tweet_id:
+                continue
+            
+            post_url = f"https://twitter.com/{author_username}/status/{tweet_id}"
             
             # Calculate popularity score (weighted engagement)
             # Likes are most important, then replies, then retweets
             popularity_score = (like_count * 1.0) + (reply_count * 1.5) + (retweet_count * 0.8)
             
             posts.append({
-                'id': tweet_id or str(tweet.id) if hasattr(tweet, 'id') else '',
+                'id': str(tweet_id),
                 'text': text,
-                'author_id': tweet.author_id if hasattr(tweet, 'author_id') else (tweet.get('author_id') if isinstance(tweet, dict) else None),
+                'author_id': str(author_id) if author_id else None,
                 'author_username': author_username,
+                'author_name': author_name,
+                'author_profile_image': author_profile_image,
+                'author_verified': author_verified,
                 'created_at': str(tweet.created_at) if hasattr(tweet, 'created_at') else None,
                 'likes': like_count,
                 'replies': reply_count,
@@ -365,7 +397,7 @@ def get_posts_for_onboarding(
                 'popularity_score': popularity_score,
                 'total_engagement': total_engagement,
                 'type': post_type,
-                'url': post_url
+                'url': post_url  # Always valid URL since we skip posts without usernames
             })
         
         # Sort by combined score: relevance (40%) + popularity (60%)
