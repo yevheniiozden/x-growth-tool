@@ -324,6 +324,11 @@ class HTTPAPIClient:
             tweet_text = tweet_data.get('text', '')
             created_at_str = tweet_data.get('createdAt', '')  # camelCase in API response
             
+            # Check if this is a reply - filter it out for onboarding
+            is_reply = tweet_data.get('isReply', False) or tweet_data.get('inReplyToId') or tweet_data.get('inReplyToUserId')
+            if is_reply:
+                continue  # Skip replies/comments
+            
             # Get author info from tweet
             author = tweet_data.get('author', {})
             author_id = author.get('id', '') if isinstance(author, dict) else None
@@ -351,6 +356,7 @@ class HTTPAPIClient:
                 'created_at': created_at,
                 'author_id': str(author_id) if author_id else None,
                 'author_username': author_username,  # Add author username for URL generation
+                'is_reply': False,  # We've filtered these out
                 'public_metrics': type('Metrics', (), {
                     'like_count': like_count,
                     'reply_count': reply_count,

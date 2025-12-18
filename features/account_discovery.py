@@ -247,7 +247,8 @@ def get_posts_for_onboarding(
         for keyword in keywords[:3]:  # Use top 3 keywords
             query_parts.append(keyword)
         
-        query = " OR ".join(query_parts) + " -is:retweet lang:en"
+        # Filter out retweets AND replies - only show original posts
+        query = " OR ".join(query_parts) + " -is:retweet -is:reply lang:en"
         
         # Search for recent tweets
         try:

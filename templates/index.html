@@ -1092,24 +1092,44 @@
                         relevant accounts, posts, and content that match your preferences.
                     </p>
                     <div class="form-group">
-                        <label class="form-label">Add Keywords</label>
+                        <label class="form-label" style="font-size: 16px; font-weight: 600; margin-bottom: 0.75rem; display: block;">
+                            Add Your Interests
+                        </label>
+                        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 1rem;">
+                            You can type keywords one by one, or paste a comma-separated list (e.g., "AI, startups, productivity")
+                        </p>
                         <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
                             <input type="text" id="keyword-input" class="form-input" 
-                                   placeholder="Type a keyword and press Enter" 
-                                   style="flex: 1;"
-                                   onkeypress="if(event.key === 'Enter') addKeyword()">
-                            <button class="btn btn-secondary" onclick="addKeyword()" style="white-space: nowrap;">
-                                Add Keyword
+                                   placeholder="Type keyword or paste list (e.g., AI, startups, marketing)" 
+                                   style="flex: 1; padding: 0.875rem; font-size: 15px;"
+                                   onkeypress="if(event.key === 'Enter') addKeyword()"
+                                   onpaste="handleKeywordPaste(event)">
+                            <button class="btn btn-secondary" onclick="addKeyword()" style="white-space: nowrap; padding: 0.875rem 1.5rem;">
+                                Add
                             </button>
                         </div>
-                        <div id="keywords-container" class="keywords-tags-container" style="min-height: 60px; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 12px; border: 1px solid var(--border);">
-                            <div style="color: var(--text-muted); font-size: 13px; margin-bottom: 0.5rem;">
-                                <span id="keyword-count">0 keywords</span> (minimum 3 required)
+                        <div id="keywords-container" class="keywords-tags-container" style="min-height: 80px; padding: 1rem; background: linear-gradient(135deg, var(--bg-tertiary) 0%, rgba(99, 102, 241, 0.05) 100%); border-radius: 16px; border: 2px solid var(--border); transition: all 0.3s ease;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span id="keyword-count" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">0 keywords</span>
+                                    <span style="color: var(--text-muted); font-size: 13px;">(minimum 3 required)</span>
+                                </div>
+                                ${window.currentKeywords && window.currentKeywords.length > 0 ? `
+                                <button class="btn btn-secondary" onclick="clearAllKeywords()" style="padding: 0.375rem 0.75rem; font-size: 12px;">
+                                    Clear All
+                                </button>
+                                ` : ''}
                             </div>
-                            <div id="keywords-tags" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+                            <div id="keywords-tags" style="display: flex; flex-wrap: wrap; gap: 0.625rem; min-height: 40px;"></div>
+                            ${(!window.currentKeywords || window.currentKeywords.length === 0) ? `
+                            <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 1rem 0; font-style: italic;">
+                                No keywords added yet. Start typing or paste a list!
+                            </div>
+                            ` : ''}
                         </div>
-                        <p style="color: var(--text-muted); font-size: 12px; margin-top: 0.5rem;">
-                            Examples: AI, startups, productivity, design, marketing
+                        <p style="color: var(--text-muted); font-size: 12px; margin-top: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>💡</span>
+                            <span>Examples: AI, startups, productivity, design, marketing, SaaS, tech</span>
                         </p>
                         <div id="keywords-analysis-results" style="margin-top: 1rem;"></div>
                     </div>
@@ -1122,7 +1142,7 @@
                 // Initialize keywords array
                 window.currentKeywords = [];
             } else if (step === 3 || step === '3') {
-                // Step 3: Relevance Sliders with grid layout
+                // Step 3: Relevance Sliders with modern grid layout
                 const keywords = onboardingData?.keywords || [];
                 let slidersHTML = keywords.map((keyword, idx) => `
                     <div class="slider-item">
@@ -1130,33 +1150,39 @@
                             <span class="slider-label">${escapeHtml(keyword)}</span>
                             <span class="slider-value" id="slider-value-${idx}">50%</span>
                         </div>
-                        <input type="range" class="slider-input" id="slider-${idx}" min="10" max="100" value="50" 
+                        <input type="range" class="slider-input" id="slider-${idx}" min="10" max="100" value="50" step="5"
                                oninput="updateSliderValue(${idx}, this.value)">
                         <div class="slider-actions">
-                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 25)">Low</button>
-                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 50)">Medium</button>
-                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 75)">High</button>
+                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 25)" title="Low relevance">Low</button>
+                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 50)" title="Medium relevance">Medium</button>
+                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 75)" title="High relevance">High</button>
                         </div>
                     </div>
                 `).join('');
                 
                 content.innerHTML = `
                     <h2>🎚️ Step 3: Set Relevance Levels</h2>
-                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.6;">
                         Adjust the relevance level for each keyword. This helps us prioritize content 
-                        and accounts that match your interests.
+                        and accounts that match your interests. Drag the slider or use quick buttons.
                     </p>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <span style="color: var(--text-muted); font-size: 14px;">${keywords.length} keywords</span>
-                        <button class="slider-quick-action" onclick="setAllSliders(50)" style="padding: 0.5rem 1rem;">
-                            Set All to 50%
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 12px;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <span style="font-size: 18px;">📊</span>
+                            <div>
+                                <div style="font-weight: 600; color: var(--text-primary);">${keywords.length} Keywords</div>
+                                <div style="font-size: 12px; color: var(--text-muted);">Adjust each one below</div>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary" onclick="setAllSliders(50)" style="padding: 0.625rem 1.25rem; font-size: 13px;">
+                            Reset All to 50%
                         </button>
                     </div>
                     <div class="sliders-grid" id="sliders-container">
                         ${slidersHTML}
                     </div>
-                    <button class="btn btn-primary" onclick="saveRelevance()" style="width: 100%;" id="relevance-btn">
-                        Continue
+                    <button class="btn btn-primary" onclick="saveRelevance()" style="width: 100%; margin-top: 1.5rem; padding: 1rem; font-size: 16px; font-weight: 600;" id="relevance-btn">
+                        Continue to Training
                     </button>
                     <div id="step3-error" style="margin-top: 1rem;"></div>
                 `;
@@ -1199,15 +1225,62 @@
         }
         
         // Keywords management
+        function handleKeywordPaste(event) {
+            // Allow default paste, then process after a short delay
+            setTimeout(() => {
+                const input = document.getElementById('keyword-input');
+                const value = input.value.trim();
+                
+                // Check if it looks like a comma-separated list
+                if (value.includes(',')) {
+                    const keywords = value.split(',')
+                        .map(k => k.trim())
+                        .filter(k => k.length > 0);
+                    
+                    keywords.forEach(keyword => {
+                        if (keyword && !window.currentKeywords.includes(keyword.toLowerCase())) {
+                            window.currentKeywords.push(keyword);
+                        }
+                    });
+                    
+                    input.value = '';
+                    updateKeywordsDisplay();
+                }
+            }, 10);
+        }
+        
         function addKeyword() {
             const input = document.getElementById('keyword-input');
-            const keyword = input.value.trim();
+            let keyword = input.value.trim();
             
             if (!keyword) return;
             
-            // Check if keyword already exists
+            // Handle comma-separated input
+            if (keyword.includes(',')) {
+                const keywords = keyword.split(',')
+                    .map(k => k.trim())
+                    .filter(k => k.length > 0);
+                
+                keywords.forEach(k => {
+                    if (k && !window.currentKeywords.includes(k.toLowerCase())) {
+                        window.currentKeywords.push(k);
+                    }
+                });
+                
+                input.value = '';
+                updateKeywordsDisplay();
+                return;
+            }
+            
+            // Single keyword
             if (window.currentKeywords.includes(keyword.toLowerCase())) {
                 input.value = '';
+                // Show brief feedback
+                const inputEl = input;
+                inputEl.style.borderColor = 'var(--warning)';
+                setTimeout(() => {
+                    inputEl.style.borderColor = '';
+                }, 1000);
                 return;
             }
             
@@ -1215,6 +1288,13 @@
             window.currentKeywords.push(keyword);
             input.value = '';
             updateKeywordsDisplay();
+        }
+        
+        function clearAllKeywords() {
+            if (confirm('Clear all keywords?')) {
+                window.currentKeywords = [];
+                updateKeywordsDisplay();
+            }
         }
         
         function removeKeyword(keyword) {
@@ -2160,17 +2240,36 @@
                             .then(response => response.json())
                             .then(oembedData => {
                                 if (oembedData.success && oembedData.html) {
-                                    // Use embedded post
+                                    // Use embedded post - wrap in container for proper display
                                     postContentElement.innerHTML = `
-                                        <div style="display: flex; justify-content: center; margin: 1rem 0;">
-                                            ${oembedData.html}
-                                        </div>
-                                        <div style="text-align: center; margin-top: 1rem;">
-                                            <a href="${data.post.url}" target="_blank" style="color: var(--primary); text-decoration: none; font-size: 14px;">
-                                                View on X →
-                                            </a>
+                                        <div style="display: flex; justify-content: center; margin: 1.5rem 0; width: 100%;">
+                                            <div style="max-width: 550px; width: 100%;">
+                                                ${oembedData.html}
+                                            </div>
                                         </div>
                                     `;
+                                    
+                                    // Load Twitter widgets script if not already loaded
+                                    if (!window.twttr) {
+                                        const script = document.createElement('script');
+                                        script.src = 'https://platform.twitter.com/widgets.js';
+                                        script.charset = 'utf-8';
+                                        script.async = true;
+                                        script.id = 'twitter-wjs';
+                                        document.head.appendChild(script);
+                                        
+                                        // Wait for script to load, then initialize
+                                        script.onload = function() {
+                                            if (window.twttr && window.twttr.widgets) {
+                                                window.twttr.widgets.load(postContentElement);
+                                            }
+                                        };
+                                    } else {
+                                        // Re-initialize widgets
+                                        if (window.twttr && window.twttr.widgets) {
+                                            window.twttr.widgets.load(postContentElement);
+                                        }
+                                    }
                                 } else {
                                     // Fallback to custom design
                                     renderCustomPost(postContentElement, data.post);
