@@ -801,19 +801,31 @@ async def get_oembed_endpoint(request: Request, url: str):
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     try:
+        import httpx
         import re
-        # Extract tweet ID from URL
-        tweet_id_match = re.search(r'/status/(\d+)', url)
-        if not tweet_id_match:
+        
+        # Clean and validate URL
+        url = url.strip()
+        if not url.startswith('http'):
+            # Try to construct URL from tweet ID or partial URL
+            if '/status/' in url:
+                url = f"https://twitter.com{url}" if not url.startswith('https://') else url
+            else:
+                return {
+                    "success": False,
+                    "error": "Invalid URL format",
+                    "html": None
+                }
+        
+        # Ensure it's a twitter.com or x.com URL
+        if 'twitter.com' not in url and 'x.com' not in url:
             return {
                 "success": False,
-                "error": "Could not extract tweet ID from URL",
+                "error": "URL must be from Twitter/X",
                 "html": None
             }
         
-        tweet_id = tweet_id_match.group(1)
-        
-        # Try X/Twitter oEmbed API first
+        # Try X/Twitter oEmbed API
         oembed_url = "https://publish.twitter.com/oembed"
         params = {
             "url": url,
@@ -824,36 +836,52 @@ async def get_oembed_endpoint(request: Request, url: str):
         }
         
         try:
-            response = requests.get(oembed_url, params=params, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                html = data.get("html", "")
-                
-                # Verify we got valid HTML
-                if html and ('<blockquote' in html or 'twitter-tweet' in html):
-                    return {
-                        "success": True,
-                        "html": html,
-                        "width": data.get("width"),
-                        "height": data.get("height"),
-                        "url": url
-                    }
+            import httpx
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(oembed_url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    html = data.get("html", "")
+                    
+                    # Verify we got valid HTML
+                    if html and ('<blockquote' in html or 'twitter-tweet' in html):
+                        return {
+                            "success": True,
+                            "html": html,
+                            "width": data.get("width"),
+                            "height": data.get("height"),
+                            "url": url
+                        }
         except Exception as e:
             print(f"oEmbed API error: {e}")
+            import traceback
+            traceback.print_exc()
         
-        # Fallback: Construct embed HTML manually
-        # This ensures we always get a proper embed structure
-        html = f'''<blockquote class="twitter-tweet" data-theme="dark" data-dnt="true">
-            <p lang="en" dir="ltr"></p>
-            <a href="{url}"></a>
-        </blockquote>'''
+        # Fallback: Construct embed HTML manually using Twitter widget
+        # Extract tweet ID for better embedding
+        tweet_id_match = re.search(r'/status/(\d+)', url)
+        tweet_id = tweet_id_match.group(1) if tweet_id_match else None
+        
+        if tweet_id:
+            html = f'''<blockquote class="twitter-tweet" data-theme="dark" data-dnt="true" data-conversation="none">
+                <p lang="en" dir="ltr"></p>
+                <a href="{url}"></a>
+            </blockquote>
+            <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'''
+        else:
+            html = f'''<blockquote class="twitter-tweet" data-theme="dark" data-dnt="true">
+                <p lang="en" dir="ltr"></p>
+                <a href="{url}"></a>
+            </blockquote>
+            <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'''
         
         return {
             "success": True,
             "html": html,
             "width": 550,
             "height": None,
-            "url": url
+            "url": url,
+            "fallback": True
         }
     except Exception as e:
         print(f"Error fetching oEmbed: {e}")
