@@ -1291,15 +1291,12 @@
                 // Initialize keywords array
                 window.currentKeywords = [];
             } else if (step === 3 || step === '3') {
-                // Step 3: Relevance Sliders with polished, premium design
+                // Step 3: Relevance Sliders - compact and clean design
                 const keywords = onboardingData?.keywords || [];
                 let slidersHTML = keywords.map((keyword, idx) => `
                     <div class="slider-item-premium">
                         <div class="slider-header-premium">
-                            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--primary); flex-shrink: 0;"></div>
-                                <span class="slider-label-premium">${escapeHtml(keyword)}</span>
-                            </div>
+                            <span class="slider-label-premium">${escapeHtml(keyword)}</span>
                             <span class="slider-value-premium" id="slider-value-${idx}">50%</span>
                         </div>
                         <div class="slider-wrapper-premium">
