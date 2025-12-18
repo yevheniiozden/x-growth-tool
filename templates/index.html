@@ -761,6 +761,127 @@
             align-items: center;
             gap: 0.25rem;
         }
+        
+        /* Modern Slider Styles */
+        .slider-item-modern {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: all 0.2s ease;
+        }
+        
+        .slider-item-modern:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+        }
+        
+        .slider-header-modern {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+        }
+        
+        .slider-label-modern {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 15px;
+        }
+        
+        .slider-value-modern {
+            color: var(--primary);
+            font-weight: 700;
+            font-size: 16px;
+            min-width: 45px;
+            text-align: right;
+        }
+        
+        .slider-wrapper {
+            position: relative;
+        }
+        
+        .slider-input-modern {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+            margin-bottom: 0.5rem;
+        }
+        
+        .slider-input-modern::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
+            border: 2px solid var(--bg-primary);
+        }
+        
+        .slider-input-modern::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 3px 10px rgba(99, 102, 241, 0.5);
+        }
+        
+        .slider-input-modern::-webkit-slider-runnable-track {
+            height: 8px;
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+        }
+        
+        .slider-input-modern::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: 2px solid var(--bg-primary);
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
+        }
+        
+        .slider-input-modern::-moz-range-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 3px 10px rgba(99, 102, 241, 0.5);
+        }
+        
+        .slider-input-modern::-moz-range-track {
+            height: 8px;
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+        }
+        
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.25rem;
+        }
+        
+        .sliders-grid-modern {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        @media (min-width: 768px) {
+            .sliders-grid-modern {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 1200px) {
+            .sliders-grid-modern {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
     </style>
 </head>
 <body>
@@ -1156,48 +1277,49 @@
                 // Initialize keywords array
                 window.currentKeywords = [];
             } else if (step === 3 || step === '3') {
-                // Step 3: Relevance Sliders with modern grid layout
+                // Step 3: Relevance Sliders with clean, modern design
                 const keywords = onboardingData?.keywords || [];
                 let slidersHTML = keywords.map((keyword, idx) => `
-                    <div class="slider-item">
-                        <div class="slider-header">
-                            <span class="slider-label">${escapeHtml(keyword)}</span>
-                            <span class="slider-value" id="slider-value-${idx}">50%</span>
+                    <div class="slider-item-modern">
+                        <div class="slider-header-modern">
+                            <span class="slider-label-modern">${escapeHtml(keyword)}</span>
+                            <span class="slider-value-modern" id="slider-value-${idx}">50%</span>
                         </div>
-                        <input type="range" class="slider-input" id="slider-${idx}" min="10" max="100" value="50" step="5"
-                               oninput="updateSliderValue(${idx}, this.value)">
-                        <div class="slider-actions">
-                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 25)" title="Low relevance">Low</button>
-                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 50)" title="Medium relevance">Medium</button>
-                            <button class="slider-quick-action" onclick="setSliderValue(${idx}, 75)" title="High relevance">High</button>
+                        <div class="slider-wrapper">
+                            <input type="range" class="slider-input-modern" id="slider-${idx}" min="10" max="100" value="50" step="1"
+                                   oninput="updateSliderValue(${idx}, this.value)">
+                            <div class="slider-labels">
+                                <span style="font-size: 11px; color: var(--text-muted);">Low</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">High</span>
+                            </div>
                         </div>
                     </div>
                 `).join('');
                 
                 content.innerHTML = `
                     <h2>🎚️ Step 3: Set Relevance Levels</h2>
-                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.6;">
-                        Adjust the relevance level for each keyword. This helps us prioritize content 
-                        and accounts that match your interests. Drag the slider or use quick buttons.
+                    <p style="color: var(--text-secondary); margin-bottom: 2rem; line-height: 1.6;">
+                        Adjust the relevance level for each keyword by dragging the slider. This helps us prioritize content 
+                        and accounts that match your interests.
                     </p>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding: 1.25rem; background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(99, 102, 241, 0.1) 100%); border-radius: 16px; border: 1px solid var(--border);">
                         <div style="display: flex; align-items: center; gap: 0.75rem;">
-                            <span style="font-size: 18px;">📊</span>
+                            <span style="font-size: 20px;">📊</span>
                             <div>
-                                <div style="font-weight: 600; color: var(--text-primary);">${keywords.length} Keywords</div>
-                                <div style="font-size: 12px; color: var(--text-muted);">Adjust each one below</div>
+                                <div style="font-weight: 700; color: var(--text-primary); font-size: 16px;">${keywords.length} Keywords</div>
+                                <div style="font-size: 13px; color: var(--text-muted);">Drag sliders to adjust relevance</div>
                             </div>
                         </div>
-                        <button class="btn btn-secondary" onclick="setAllSliders(50)" style="padding: 0.625rem 1.25rem; font-size: 13px;">
-                            Reset All to 50%
+                        <button class="btn btn-secondary" onclick="setAllSliders(50)" style="padding: 0.75rem 1.5rem; font-size: 14px; font-weight: 600;">
+                            Reset All
                         </button>
                     </div>
-                    <div class="sliders-grid" id="sliders-container" style="max-height: 60vh; overflow-y: auto; padding-right: 0.5rem;">
+                    <div class="sliders-grid-modern" id="sliders-container" style="max-height: 60vh; overflow-y: auto; padding-right: 0.5rem;">
                         ${slidersHTML}
                     </div>
                     <div style="position: sticky; bottom: 0; background: var(--bg-primary); padding: 1.5rem 0; margin-top: 1.5rem; border-top: 2px solid var(--border);">
-                        <button class="btn btn-primary" onclick="saveRelevance()" style="width: 100%; padding: 1rem; font-size: 16px; font-weight: 600;" id="relevance-btn">
-                            Continue to Training
+                        <button class="btn btn-primary" onclick="saveRelevance()" style="width: 100%; padding: 1.125rem; font-size: 16px; font-weight: 700; border-radius: 12px;" id="relevance-btn">
+                            Continue to Training →
                         </button>
                     </div>
                     <div id="step3-error" style="margin-top: 1rem;"></div>
@@ -1621,44 +1743,97 @@
                 const progress = await progressRes.json();
                 const actions = await actionsRes.json();
                 
-                let html = '<div class="card-grid">';
+                // Modern dashboard design
+                let html = `
+                    <div style="margin-bottom: 2rem;">
+                        <h2 style="font-size: 28px; font-weight: 800; margin-bottom: 0.5rem; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                            Today's Overview
+                        </h2>
+                        <p style="color: var(--text-secondary); font-size: 15px;">Track your daily engagement goals and progress</p>
+                    </div>
+                    
+                    <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+                `;
+                
                 for (const [key, value] of Object.entries(targets.targets)) {
                     const completed = progress.completed[key] || 0;
                     const remaining = progress.remaining[key] || 0;
                     const percentage = value > 0 ? Math.round((completed / value) * 100) : 0;
+                    const icon = {
+                        'posts': '📝',
+                        'replies': '💬',
+                        'likes': '❤️',
+                        'follows': '👥'
+                    }[key] || '📊';
                     
                     html += `
-                        <div class="card">
-                            <div class="card-value">${completed}/${value}</div>
-                            <div class="card-label">${key.toUpperCase()}</div>
-                            <div class="card-subtitle">${remaining} remaining</div>
-                            <div class="progress-container" style="margin-top: 1rem;">
-                                <div class="progress-fill" style="width: ${percentage}%"></div>
+                        <div class="card" style="background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(99, 102, 241, 0.05) 100%); border: 1px solid var(--border); padding: 1.75rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                                <span style="font-size: 32px;">${icon}</span>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 32px; font-weight: 800; color: var(--primary); line-height: 1;">${completed}</div>
+                                    <div style="font-size: 14px; color: var(--text-muted);">of ${value}</div>
+                                </div>
+                            </div>
+                            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.75rem; text-transform: capitalize; font-size: 15px;">${key}</div>
+                            <div class="progress-container" style="height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden;">
+                                <div class="progress-fill" style="width: ${percentage}%; height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); border-radius: 4px;"></div>
+                            </div>
+                            <div style="margin-top: 0.75rem; font-size: 13px; color: var(--text-muted);">
+                                ${remaining} remaining
                             </div>
                         </div>
                     `;
                 }
                 html += '</div>';
                 
-                html += `<div class="card" style="margin: 1.5rem 0;">
-                    <div class="card-label">Overall Progress</div>
-                    <div class="progress-container">
-                        <div class="progress-fill" style="width: ${progress.completion_percentage}%">${Math.round(progress.completion_percentage)}%</div>
+                // Overall progress card
+                html += `
+                    <div class="card" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%); border: 2px solid var(--primary); padding: 2rem; margin-bottom: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <div>
+                                <div style="font-weight: 700; color: var(--text-primary); font-size: 18px; margin-bottom: 0.25rem;">Overall Progress</div>
+                                <div style="font-size: 14px; color: var(--text-secondary);">Today's completion rate</div>
+                            </div>
+                            <div style="font-size: 36px; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                                ${Math.round(progress.completion_percentage)}%
+                            </div>
+                        </div>
+                        <div class="progress-container" style="height: 12px; background: var(--bg-tertiary); border-radius: 6px; overflow: hidden;">
+                            <div class="progress-fill" style="width: ${progress.completion_percentage}%; height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); border-radius: 6px;"></div>
+                        </div>
                     </div>
-                </div>`;
+                `;
                 
-                html += '<h3 style="margin-top: 2rem; margin-bottom: 1rem;">Prioritized Actions</h3>';
+                // Prioritized Actions
+                html += `
+                    <div style="margin-bottom: 1.5rem;">
+                        <h3 style="font-size: 22px; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-primary);">🎯 Prioritized Actions</h3>
+                        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 1.5rem;">Actions to help you reach your daily goals</p>
+                    </div>
+                `;
+                
                 if (actions.length === 0) {
-                    html += '<div class="alert alert-info">No actions available. Generate content or check for reply opportunities.</div>';
+                    html += `
+                        <div class="card" style="text-align: center; padding: 3rem 2rem; background: var(--bg-secondary); border: 1px dashed var(--border);">
+                            <div style="font-size: 48px; margin-bottom: 1rem;">✨</div>
+                            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; font-size: 16px;">All caught up!</div>
+                            <div style="color: var(--text-secondary); font-size: 14px;">Generate content or check for reply opportunities to see actions here.</div>
+                        </div>
+                    `;
                 } else {
-                    actions.forEach(action => {
+                    actions.forEach((action, idx) => {
                         html += `
-                            <div class="action-item">
-                                <div class="action-content">
-                                    <div class="action-title">${action.action}</div>
-                                    <div class="rationale">${action.rationale}</div>
+                            <div class="card" style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; margin-bottom: 1rem; background: var(--bg-secondary); border: 1px solid var(--border); transition: all 0.2s ease;" 
+                                 onmouseover="this.style.borderColor='var(--primary)'; this.style.transform='translateX(4px)';" 
+                                 onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateX(0)';">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; font-size: 16px;">${action.action}</div>
+                                    <div style="color: var(--text-secondary); font-size: 14px; line-height: 1.5;">${action.rationale}</div>
                                 </div>
-                                <button class="btn btn-primary" onclick="completeAction('${action.type}', '${action.data.id || ''}')">Complete</button>
+                                <button class="btn btn-primary" onclick="completeAction('${action.type}', '${action.data.id || ''}')" style="margin-left: 1.5rem; padding: 0.75rem 1.5rem; font-weight: 600; white-space: nowrap;">
+                                    Complete
+                                </button>
                             </div>
                         `;
                     });

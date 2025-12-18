@@ -779,6 +779,20 @@ async def complete_interactive_endpoint(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/onboarding/interactive/skip-phase")
+async def skip_phase_endpoint(request: Request):
+    """Skip current onboarding phase"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        from onboarding_flow import skip_onboarding_phase
+        return skip_onboarding_phase(user.get("user_id"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/onboarding/oembed")
 async def get_oembed_endpoint(request: Request, url: str):
     """Get X/Twitter oEmbed HTML for a post URL"""

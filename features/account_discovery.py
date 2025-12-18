@@ -327,11 +327,18 @@ def get_posts_for_onboarding(
             # Normalize score
             relevance_score = min(1.0, relevance_score / len(keywords))
             
-            # Filter by engagement (for engagement-type posts)
-            if post_type == 'engage':
-                total_engagement = like_count + reply_count + retweet_count
-                if total_engagement < 10:  # Minimum engagement threshold
-                    continue
+            # Calculate total engagement
+            total_engagement = like_count + reply_count + retweet_count
+            
+            # Prioritize posts with significant traction - minimum engagement thresholds
+            min_engagement = {
+                'like': 50,      # Posts for liking should have at least 50 likes
+                'engage': 100,   # Posts for engagement should have at least 100 total engagement
+                'default': 30    # Default minimum for other types
+            }.get(post_type, 30)
+            
+            if total_engagement < min_engagement:
+                continue
             
             # Get post URL for embedding
             tweet_id = tweet.id if hasattr(tweet, 'id') else (tweet.get('id') if isinstance(tweet, dict) else None)
@@ -340,6 +347,10 @@ def get_posts_for_onboarding(
             post_url = None
             if tweet_id and author_username:
                 post_url = f"https://twitter.com/{author_username}/status/{tweet_id}"
+            
+            # Calculate popularity score (weighted engagement)
+            # Likes are most important, then replies, then retweets
+            popularity_score = (like_count * 1.0) + (reply_count * 1.5) + (retweet_count * 0.8)
             
             posts.append({
                 'id': tweet_id or str(tweet.id) if hasattr(tweet, 'id') else '',
@@ -351,14 +362,17 @@ def get_posts_for_onboarding(
                 'replies': reply_count,
                 'retweets': retweet_count,
                 'relevance_score': relevance_score,
+                'popularity_score': popularity_score,
+                'total_engagement': total_engagement,
                 'type': post_type,
                 'url': post_url
             })
         
-        # Sort by relevance and engagement
+        # Sort by combined score: relevance (40%) + popularity (60%)
+        # This ensures we get posts that are both relevant AND have traction
         posts.sort(key=lambda x: (
-            x['relevance_score'] * 0.6 + 
-            (x['likes'] + x['replies']) / 1000 * 0.4
+            x['relevance_score'] * 0.4 + 
+            min(x['popularity_score'] / 1000, 1.0) * 0.6  # Normalize popularity to 0-1
         ), reverse=True)
         
         return posts[:max_results]
