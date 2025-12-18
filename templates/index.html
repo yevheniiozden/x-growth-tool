@@ -2624,9 +2624,33 @@
                         
                         // Start progressive enhancement polling if not AI-enhanced yet
                         if (!data.ai_enhanced && !aiEnhancementCheckInterval) {
+                            // Clear any existing interval first
+                            if (aiEnhancementCheckInterval) {
+                                clearInterval(aiEnhancementCheckInterval);
+                            }
                             aiEnhancementCheckInterval = setInterval(() => {
                                 checkForAIEnhancement(phase);
                             }, 5000); // Check every 5 seconds
+                            
+                            // Show indicator that AI enhancement is in progress
+                            const enhancingIndicator = document.createElement('div');
+                            enhancingIndicator.style.cssText = 'text-align: center; padding: 0.5rem; background: rgba(99, 102, 241, 0.05); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 1rem; font-size: 13px; color: var(--text-secondary);';
+                            enhancingIndicator.innerHTML = '🔄 AI enhancement in progress... Better results coming soon';
+                            enhancingIndicator.id = 'ai-enhancing-indicator';
+                            if (!postContentElement.querySelector('#ai-enhancing-indicator')) {
+                                postContentElement.insertBefore(enhancingIndicator, postContentElement.firstChild);
+                            }
+                        } else if (data.ai_enhanced) {
+                            // Stop polling if we have AI-enhanced results
+                            if (aiEnhancementCheckInterval) {
+                                clearInterval(aiEnhancementCheckInterval);
+                                aiEnhancementCheckInterval = null;
+                            }
+                            // Remove enhancing indicator if it exists
+                            const enhancingIndicator = postContentElement.querySelector('#ai-enhancing-indicator');
+                            if (enhancingIndicator) {
+                                enhancingIndicator.remove();
+                            }
                         }
                         
                         // Check if this is a loading state
