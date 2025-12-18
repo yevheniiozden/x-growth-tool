@@ -67,7 +67,19 @@ def search_accounts_by_keywords(
                 if users.data:
                     for user in users.data:
                         metrics = user.public_metrics
-                        followers = metrics.get('followers_count', 0)
+                        # Handle both dict and object metrics
+                        if hasattr(metrics, 'followers_count'):
+                            followers = getattr(metrics, 'followers_count', 0)
+                            following_count = getattr(metrics, 'following_count', 0)
+                            tweet_count = getattr(metrics, 'tweet_count', 0)
+                        elif isinstance(metrics, dict):
+                            followers = metrics.get('followers_count', 0)
+                            following_count = metrics.get('following_count', 0)
+                            tweet_count = metrics.get('tweet_count', 0)
+                        else:
+                            followers = 0
+                            following_count = 0
+                            tweet_count = 0
                         
                         # Filter by criteria
                         if followers < min_followers:
@@ -93,8 +105,8 @@ def search_accounts_by_keywords(
                             'name': user.name,
                             'description': user.description or '',
                             'followers': followers,
-                            'following': metrics.get('following_count', 0),
-                            'tweets': metrics.get('tweet_count', 0),
+                            'following': following_count,
+                            'tweets': tweet_count,
                             'verified': user.verified or False,
                             'profile_image_url': getattr(user, 'profile_image_url', None),
                             'relevance_score': relevance_score,
@@ -408,14 +420,28 @@ def get_account_details(account_id: str) -> Optional[Dict[str, Any]]:
             return None
         
         metrics = user.data.public_metrics
+        # Handle both dict and object metrics
+        if hasattr(metrics, 'followers_count'):
+            followers = getattr(metrics, 'followers_count', 0)
+            following = getattr(metrics, 'following_count', 0)
+            tweets = getattr(metrics, 'tweet_count', 0)
+        elif isinstance(metrics, dict):
+            followers = metrics.get('followers_count', 0)
+            following = metrics.get('following_count', 0)
+            tweets = metrics.get('tweet_count', 0)
+        else:
+            followers = 0
+            following = 0
+            tweets = 0
+        
         return {
             'id': user.data.id,
             'username': user.data.username,
             'name': user.data.name,
             'description': user.data.description or '',
-            'followers': metrics.get('followers_count', 0),
-            'following': metrics.get('following_count', 0),
-            'tweets': metrics.get('tweet_count', 0),
+            'followers': followers,
+            'following': following,
+            'tweets': tweets,
             'verified': user.data.verified or False,
             'profile_image_url': getattr(user.data, 'profile_image_url', None),
             'created_at': str(user.data.created_at) if hasattr(user.data, 'created_at') else None
