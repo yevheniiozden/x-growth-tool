@@ -67,6 +67,7 @@ def connect_x_account(user_id: str, x_username: str) -> Dict[str, Any]:
     
     # Test connection by trying to fetch user data
     try:
+        import requests
         timeline = get_user_timeline(x_username, days_back=1, max_results=1)
         # If we can fetch, connection works
         users[user_id]["x_username"] = x_username
@@ -79,10 +80,26 @@ def connect_x_account(user_id: str, x_username: str) -> Dict[str, Any]:
             "message": "X account connected successfully",
             "step": 2
         }
-    except Exception as e:
+    except requests.exceptions.ReadTimeout:
         return {
             "success": False,
-            "error": f"Could not connect to X account: {str(e)}. Please check your API keys."
+            "error": "Connection timed out. The X API is slow right now. Please try again."
+        }
+    except requests.exceptions.RequestException as e:
+        return {
+            "success": False,
+            "error": f"Network error: {str(e)}. Please check your connection and try again."
+        }
+    except Exception as e:
+        error_msg = str(e)
+        if "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+            return {
+                "success": False,
+                "error": "Connection timed out. Please try again."
+            }
+        return {
+            "success": False,
+            "error": f"Could not connect to X account: {error_msg}. Please check your API keys."
         }
 
 
