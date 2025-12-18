@@ -1,11 +1,13 @@
 """Main FastAPI application for X Growth AI Tool"""
-from fastapi import FastAPI, HTTPException, Request, Cookie
+from fastapi import FastAPI, HTTPException, Request, Cookie, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import requests
+from collections import defaultdict
+from time import time
 
 # Import features
 from features.content_intelligence import analyze_list_content, analyze_multiple_lists
