@@ -122,28 +122,31 @@ class HTTPAPIClient:
             print(f"Warning: get_user received string response: {data[:100]}")
             return None
         
-        # twitterapi.io response format may differ, handle both formats
-        # Check if data is nested or direct
+        # twitterapi.io response format: {"data": {...}, "status": str, "msg": str}
         if isinstance(data, dict):
-            user_data = data.get('data', data)
+            user_data = data.get('data', {})
+            if not user_data:
+                print(f"Warning: get_user response missing data field: {data.get('msg', 'Unknown error')}")
+                return None
         else:
             print(f"Warning: get_user received unexpected data type: {type(data)}")
             return None
         
         # Return object compatible with tweepy format
+        # twitterapi.io uses camelCase field names
         return type('User', (), {
             'data': type('UserData', (), {
-                'id': str(user_data.get('id', user_data.get('userId', ''))),
-                'username': user_data.get('username', user_data.get('userName', '')),
-                'name': user_data.get('name', user_data.get('displayName', '')),
-                'description': user_data.get('description', user_data.get('bio', '')),
+                'id': str(user_data.get('id', '')),
+                'username': user_data.get('userName', ''),  # camelCase
+                'name': user_data.get('name', ''),
+                'description': user_data.get('description', ''),
                 'public_metrics': type('Metrics', (), {
-                    'followers_count': user_data.get('followersCount', user_data.get('public_metrics', {}).get('followers_count', 0)),
-                    'following_count': user_data.get('followingCount', user_data.get('public_metrics', {}).get('following_count', 0)),
-                    'tweet_count': user_data.get('tweetCount', user_data.get('public_metrics', {}).get('tweet_count', 0)),
-                    'like_count': user_data.get('likeCount', user_data.get('public_metrics', {}).get('like_count', 0))
+                    'followers_count': user_data.get('followers', 0),  # API uses 'followers'
+                    'following_count': user_data.get('following', 0),  # API uses 'following'
+                    'tweet_count': user_data.get('statusesCount', 0),  # API uses 'statusesCount'
+                    'like_count': user_data.get('favouritesCount', 0)  # API uses 'favouritesCount'
                 })(),
-                'verified': user_data.get('verified', False)
+                'verified': user_data.get('isBlueVerified', False)  # API uses 'isBlueVerified'
             })()
         })()
     
@@ -261,13 +264,13 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        # URL encode query parameter
+        # URL encode query parameter - use correct endpoint with underscore
         from urllib.parse import urlencode
         params_dict = {
             "query": query,
-            "count": min(max_results, 100)
+            "queryType": "Latest"  # Required parameter, default is "Latest"
         }
-        endpoint = f"/twitter/tweet/advancedSearch?{urlencode(params_dict)}"
+        endpoint = f"/twitter/tweet/advanced_search?{urlencode(params_dict)}"
         params = {}
         
         data = self._make_request("GET", endpoint, params)
@@ -342,12 +345,12 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        # twitterapi.io batch endpoint - URL encode userIds
+        # twitterapi.io batch endpoint - use correct endpoint name
         from urllib.parse import urlencode
         params_dict = {
-            "userIds": ','.join(ids[:100])  # Limit to 100
+            "userIds": ','.join(ids[:100])  # Limit to 100, comma-separated
         }
-        endpoint = f"/twitter/user/batchUserInfo?{urlencode(params_dict)}"
+        endpoint = f"/twitter/user/batch_info_by_ids?{urlencode(params_dict)}"
         params = {}
         
         data = self._make_request("GET", endpoint, params)
@@ -359,9 +362,9 @@ class HTTPAPIClient:
             print(f"Warning: get_users received string response: {data[:100]}")
             return type('Response', (), {'data': None})()
         
-        # twitterapi.io response format
+        # twitterapi.io response format: {"users": [...], "status": str, "msg": str}
         if isinstance(data, dict):
-            users_data = data.get('data', data.get('users', []))
+            users_data = data.get('users', [])
         elif isinstance(data, list):
             users_data = data
         else:
@@ -371,19 +374,20 @@ class HTTPAPIClient:
         # Convert to tweepy-compatible format
         users = []
         for user_data in users_data:
+            # twitterapi.io uses camelCase field names
             user = type('User', (), {
-                'id': str(user_data.get('id', user_data.get('userId', ''))),
-                'username': user_data.get('username', user_data.get('userName', '')),
-                'name': user_data.get('name', user_data.get('displayName', '')),
-                'description': user_data.get('description', user_data.get('bio', '')),
+                'id': str(user_data.get('id', '')),
+                'username': user_data.get('userName', ''),  # camelCase
+                'name': user_data.get('name', ''),
+                'description': user_data.get('description', ''),
                 'public_metrics': type('Metrics', (), {
-                    'followers_count': user_data.get('followersCount', user_data.get('public_metrics', {}).get('followers_count', 0)),
-                    'following_count': user_data.get('followingCount', user_data.get('public_metrics', {}).get('following_count', 0)),
-                    'tweet_count': user_data.get('tweetCount', user_data.get('public_metrics', {}).get('tweet_count', 0)),
-                    'like_count': user_data.get('likeCount', user_data.get('public_metrics', {}).get('like_count', 0))
+                    'followers_count': user_data.get('followers', 0),  # API uses 'followers' not 'followersCount'
+                    'following_count': user_data.get('following', 0),  # API uses 'following' not 'followingCount'
+                    'tweet_count': user_data.get('statusesCount', 0),  # API uses 'statusesCount'
+                    'like_count': user_data.get('favouritesCount', 0)  # API uses 'favouritesCount'
                 })(),
-                'verified': user_data.get('verified', False),
-                'profile_image_url': user_data.get('profile_image_url', user_data.get('avatar', ''))
+                'verified': user_data.get('isBlueVerified', False),  # API uses 'isBlueVerified'
+                'profile_image_url': user_data.get('profilePicture', '')  # API uses 'profilePicture'
             })()
             users.append(user)
         
@@ -437,12 +441,14 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        # twitterapi.io endpoint for list members - URL encode parameters
+        # twitterapi.io endpoint for list members - use correct parameter name
         from urllib.parse import urlencode
         params_dict = {
-            "listId": id,
-            "count": min(max_results, 100)
+            "list_id": id  # Parameter is list_id, not listId
         }
+        # Note: max_results is handled by pagination with cursor, page size is 20
+        if pagination_token:
+            params_dict["cursor"] = pagination_token
         endpoint = f"/twitter/list/members?{urlencode(params_dict)}"
         params = {}
         
