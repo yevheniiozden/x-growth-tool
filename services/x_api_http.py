@@ -37,26 +37,60 @@ class HTTPAPIClient:
         """
         url = f"{self.base_url}{endpoint}"
         
+        # Log request details for debugging
+        print(f"HTTP API Request: {method} {url}")
+        print(f"Headers: {list(self.headers.keys())}")
+        if params:
+            print(f"Params: {params}")
+        
         try:
             if method == "GET":
                 response = requests.get(url, headers=self.headers, params=params, timeout=10)
             else:
                 response = requests.request(method, url, headers=self.headers, json=params, timeout=10)
             
+            # Log response details
+            print(f"HTTP API Response: {response.status_code}")
+            print(f"Content-Type: {response.headers.get('Content-Type', 'unknown')}")
+            
             if response.status_code == 200:
-                return response.json()
+                try:
+                    # Check content type before parsing
+                    content_type = response.headers.get('Content-Type', '').lower()
+                    if 'application/json' in content_type or 'text/json' in content_type:
+                        json_data = response.json()
+                        print(f"Response data type: {type(json_data)}")
+                        return json_data
+                    else:
+                        # Try to parse anyway, but log warning
+                        print(f"Warning: Non-JSON content type: {content_type}")
+                        try:
+                            json_data = response.json()
+                            return json_data
+                        except:
+                            print(f"Non-JSON response (first 200 chars): {response.text[:200]}")
+                            return None
+                except ValueError as json_error:
+                    # Response is not valid JSON
+                    print(f"JSON parsing error: {json_error}")
+                    print(f"Response text (first 200 chars): {response.text[:200]}")
+                    return None
             elif response.status_code == 401:
-                print(f"HTTP API authentication error: {response.status_code} - {response.text[:200]}")
+                print(f"HTTP API authentication error: {response.status_code}")
                 print(f"URL: {url}")
-                print(f"Headers: {list(self.headers.keys())}")
+                print(f"Response: {response.text[:200]}")
+                print(f"Headers sent: {list(self.headers.keys())}")
                 return None
             else:
-                print(f"HTTP API error: {response.status_code} - {response.text[:200]}")
+                print(f"HTTP API error: {response.status_code}")
                 print(f"URL: {url}")
+                print(f"Response: {response.text[:200]}")
                 return None
                 
         except Exception as e:
             print(f"HTTP API request error: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def get_user(self, username: Optional[str] = None, user_id: Optional[str] = None) -> Optional[Any]:
@@ -71,7 +105,9 @@ class HTTPAPIClient:
             User object (compatible with tweepy format)
         """
         if username:
-            endpoint = f"/twitter/user/info?userName={username}"
+            # URL encode username to handle special characters
+            from urllib.parse import quote
+            endpoint = f"/twitter/user/info?userName={quote(username)}"
         elif user_id:
             endpoint = f"/twitter/user/info?userId={user_id}"
         else:
@@ -81,9 +117,18 @@ class HTTPAPIClient:
         if not data:
             return None
         
+        # Handle string responses (shouldn't happen, but be safe)
+        if isinstance(data, str):
+            print(f"Warning: get_user received string response: {data[:100]}")
+            return None
+        
         # twitterapi.io response format may differ, handle both formats
         # Check if data is nested or direct
-        user_data = data.get('data', data) if isinstance(data, dict) else data
+        if isinstance(data, dict):
+            user_data = data.get('data', data)
+        else:
+            print(f"Warning: get_user received unexpected data type: {type(data)}")
+            return None
         
         # Return object compatible with tweepy format
         return type('User', (), {
@@ -123,7 +168,13 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        endpoint = f"/twitter/user/lastTweets?userId={id}&count={min(max_results, 100)}"
+        # URL encode parameters
+        from urllib.parse import urlencode
+        params_dict = {
+            "userId": id,
+            "count": min(max_results, 100)
+        }
+        endpoint = f"/twitter/user/lastTweets?{urlencode(params_dict)}"
         params = {}
         
         # Note: twitterapi.io may not support all these parameters
@@ -133,8 +184,19 @@ class HTTPAPIClient:
         if not data:
             return type('Response', (), {'data': None, 'meta': {}})()
         
+        # Handle string responses
+        if isinstance(data, str):
+            print(f"Warning: get_users_tweets received string response: {data[:100]}")
+            return type('Response', (), {'data': None, 'meta': {}})()
+        
         # twitterapi.io response format - handle both nested and direct formats
-        tweets_data = data.get('data', data.get('tweets', [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        if isinstance(data, dict):
+            tweets_data = data.get('data', data.get('tweets', []))
+        elif isinstance(data, list):
+            tweets_data = data
+        else:
+            print(f"Warning: get_users_tweets received unexpected data type: {type(data)}")
+            return type('Response', (), {'data': None, 'meta': {}})()
         
         # Convert to tweepy-compatible format
         tweets = []
@@ -199,15 +261,32 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        endpoint = f"/twitter/tweet/advancedSearch?query={query}&count={min(max_results, 100)}"
+        # URL encode query parameter
+        from urllib.parse import urlencode
+        params_dict = {
+            "query": query,
+            "count": min(max_results, 100)
+        }
+        endpoint = f"/twitter/tweet/advancedSearch?{urlencode(params_dict)}"
         params = {}
         
         data = self._make_request("GET", endpoint, params)
         if not data:
             return type('Response', (), {'data': None, 'meta': {}})()
         
+        # Handle string responses
+        if isinstance(data, str):
+            print(f"Warning: search_recent_tweets received string response: {data[:100]}")
+            return type('Response', (), {'data': None, 'meta': {}})()
+        
         # twitterapi.io response format
-        tweets_data = data.get('data', data.get('tweets', [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        if isinstance(data, dict):
+            tweets_data = data.get('data', data.get('tweets', []))
+        elif isinstance(data, list):
+            tweets_data = data
+        else:
+            print(f"Warning: search_recent_tweets received unexpected data type: {type(data)}")
+            return type('Response', (), {'data': None, 'meta': {}})()
         
         # Convert to tweepy-compatible format
         tweets = []
@@ -263,16 +342,31 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        # twitterapi.io batch endpoint
-        endpoint = f"/twitter/user/batchUserInfo?userIds={','.join(ids[:100])}"  # Limit to 100
+        # twitterapi.io batch endpoint - URL encode userIds
+        from urllib.parse import urlencode
+        params_dict = {
+            "userIds": ','.join(ids[:100])  # Limit to 100
+        }
+        endpoint = f"/twitter/user/batchUserInfo?{urlencode(params_dict)}"
         params = {}
         
         data = self._make_request("GET", endpoint, params)
         if not data:
             return type('Response', (), {'data': None})()
         
+        # Handle string responses
+        if isinstance(data, str):
+            print(f"Warning: get_users received string response: {data[:100]}")
+            return type('Response', (), {'data': None})()
+        
         # twitterapi.io response format
-        users_data = data.get('data', data.get('users', [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        if isinstance(data, dict):
+            users_data = data.get('data', data.get('users', []))
+        elif isinstance(data, list):
+            users_data = data
+        else:
+            print(f"Warning: get_users received unexpected data type: {type(data)}")
+            return type('Response', (), {'data': None})()
         
         # Convert to tweepy-compatible format
         users = []
@@ -343,8 +437,13 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        # twitterapi.io endpoint for list members
-        endpoint = f"/twitter/list/members?listId={id}&count={min(max_results, 100)}"
+        # twitterapi.io endpoint for list members - URL encode parameters
+        from urllib.parse import urlencode
+        params_dict = {
+            "listId": id,
+            "count": min(max_results, 100)
+        }
+        endpoint = f"/twitter/list/members?{urlencode(params_dict)}"
         params = {}
         
         data = self._make_request("GET", endpoint, params)

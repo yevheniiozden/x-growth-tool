@@ -9,34 +9,40 @@ client = None
 use_http_client = False
 api_key = config.X_BEARER_TOKEN or config.X_API_KEY
 
-# Try tweepy first (for official Twitter API)
-if api_key:
-    try:
-        # Use Bearer Token if available, otherwise try API Key as Bearer Token
-        client = tweepy.Client(
-            bearer_token=api_key,
-            wait_on_rate_limit=True
-        )
-        # Don't test immediately - let it fail on first real call
-        # This avoids unnecessary API calls and handles errors gracefully
-    except Exception as e:
-        print(f"Warning: Could not initialize Twitter client with Bearer Token: {e}")
-        print("Will use HTTP client for twitterapi.io")
-        use_http_client = True
-        # Fallback: try with API Key + Secret if available
-        if config.X_API_KEY and config.X_API_SECRET:
-            try:
-                client = tweepy.Client(
-                    consumer_key=config.X_API_KEY,
-                    consumer_secret=config.X_API_SECRET,
-                    wait_on_rate_limit=True
-                )
-                use_http_client = False
-            except Exception as e2:
-                print(f"Warning: Could not initialize Twitter client: {e2}")
-                use_http_client = True
+# Detect if using twitterapi.io (has X_API_KEY but no X_BEARER_TOKEN)
+# Skip tweepy initialization in this case
+if config.X_API_KEY and not config.X_BEARER_TOKEN:
+    print("Detected twitterapi.io API key - using HTTP client directly")
+    use_http_client = True
+else:
+    # Try tweepy first (for official Twitter API)
+    if api_key:
+        try:
+            # Use Bearer Token if available, otherwise try API Key as Bearer Token
+            client = tweepy.Client(
+                bearer_token=api_key,
+                wait_on_rate_limit=True
+            )
+            # Don't test immediately - let it fail on first real call
+            # This avoids unnecessary API calls and handles errors gracefully
+        except Exception as e:
+            print(f"Warning: Could not initialize Twitter client with Bearer Token: {e}")
+            print("Will use HTTP client for twitterapi.io")
+            use_http_client = True
+            # Fallback: try with API Key + Secret if available
+            if config.X_API_KEY and config.X_API_SECRET:
+                try:
+                    client = tweepy.Client(
+                        consumer_key=config.X_API_KEY,
+                        consumer_secret=config.X_API_SECRET,
+                        wait_on_rate_limit=True
+                    )
+                    use_http_client = False
+                except Exception as e2:
+                    print(f"Warning: Could not initialize Twitter client: {e2}")
+                    use_http_client = True
 
-# If tweepy doesn't work, use HTTP client for twitterapi.io
+# If using HTTP client (twitterapi.io), initialize it
 if use_http_client and api_key:
     try:
         from services.x_api_http import HTTPAPIClient
