@@ -1726,6 +1726,101 @@
             }
         }
 
+        // User search autocomplete
+        let searchTimeout = null;
+        let selectedUser = null;
+        
+        document.addEventListener('input', function(e) {
+            if (e.target && e.target.id === 'x-username-input') {
+                const query = e.target.value.trim();
+                const resultsDiv = document.getElementById('user-search-results');
+                const previewDiv = document.getElementById('selected-user-preview');
+                
+                // Clear previous timeout
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                
+                // Hide preview if user cleared input
+                if (!query || query.length < 2) {
+                    if (resultsDiv) resultsDiv.classList.add('hidden');
+                    if (previewDiv) previewDiv.classList.add('hidden');
+                    selectedUser = null;
+                    return;
+                }
+                
+                // Debounce search
+                searchTimeout = setTimeout(async () => {
+                    try {
+                        const response = await fetch(`/api/onboarding/search-users?query=${encodeURIComponent(query)}`, {
+                            headers: getAuthHeaders()
+                        });
+                        const data = await response.json();
+                        
+                        if (resultsDiv) {
+                            if (data.users && data.users.length > 0) {
+                                resultsDiv.innerHTML = data.users.map(user => `
+                                    <div class="user-search-item" onclick="selectUser(${JSON.stringify(user).replace(/"/g, '&quot;')})">
+                                        <img src="${user.profile_image_url || ''}" alt="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 0.75rem; background: var(--bg-tertiary);">
+                                        <div style="flex: 1;">
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <span style="font-weight: 600; color: var(--text-primary);">${user.name || user.username}</span>
+                                                ${user.verified ? '<span style="color: var(--primary); font-weight: bold;">✓</span>' : ''}
+                                            </div>
+                                            <div style="color: var(--text-secondary); font-size: 14px;">@${user.username}</div>
+                                        </div>
+                                    </div>
+                                `).join('');
+                                resultsDiv.classList.remove('hidden');
+                            } else {
+                                resultsDiv.classList.add('hidden');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Search error:', error);
+                        if (resultsDiv) resultsDiv.classList.add('hidden');
+                    }
+                }, 300);
+            }
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const input = document.getElementById('x-username-input');
+            const resultsDiv = document.getElementById('user-search-results');
+            if (input && resultsDiv && !input.contains(e.target) && !resultsDiv.contains(e.target)) {
+                resultsDiv.classList.add('hidden');
+            }
+        });
+        
+        function selectUser(user) {
+            selectedUser = user;
+            const input = document.getElementById('x-username-input');
+            const resultsDiv = document.getElementById('user-search-results');
+            const previewDiv = document.getElementById('selected-user-preview');
+            const avatarImg = document.getElementById('selected-user-avatar');
+            const nameSpan = document.getElementById('selected-user-name');
+            const handleSpan = document.getElementById('selected-user-handle');
+            const verifiedBadge = document.getElementById('selected-user-verified');
+            
+            if (input) input.value = user.username;
+            if (resultsDiv) resultsDiv.classList.add('hidden');
+            
+            if (avatarImg) avatarImg.src = user.profile_image_url || '';
+            if (nameSpan) nameSpan.textContent = user.name || user.username;
+            if (handleSpan) handleSpan.textContent = `@${user.username}`;
+            
+            if (verifiedBadge) {
+                if (user.verified) {
+                    verifiedBadge.classList.remove('hidden');
+                } else {
+                    verifiedBadge.classList.add('hidden');
+                }
+            }
+            
+            if (previewDiv) previewDiv.classList.remove('hidden');
+        }
+        
         // Allow Enter key in X username input
         document.addEventListener('keypress', function(e) {
             if (e.target && e.target.id === 'x-username-input' && e.key === 'Enter') {

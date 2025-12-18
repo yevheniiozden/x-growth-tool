@@ -462,24 +462,39 @@ async def search_users_endpoint(request: Request, query: str):
             # Handle both tweepy and HTTP client responses
             if hasattr(user_obj, 'data') and user_obj.data:
                 user_data = user_obj.data
+                profile_image = getattr(user_data, 'profile_image_url', '') or ''
                 return {
                     "users": [{
                         "id": str(user_data.id),
                         "username": user_data.username,
                         "name": getattr(user_data, 'name', user_data.username),
-                        "profile_image_url": getattr(user_data, 'profile_image_url', ''),
+                        "profile_image_url": profile_image,
                         "verified": getattr(user_data, 'verified', False)
+                    }]
+                }
+            elif hasattr(user_obj, 'data'):
+                # HTTP client wraps in 'data' attribute
+                user_data = user_obj.data
+                profile_image = getattr(user_data, 'profile_image_url', '') or getattr(user_data, 'profilePicture', '') or ''
+                return {
+                    "users": [{
+                        "id": str(getattr(user_data, 'id', '')),
+                        "username": getattr(user_data, 'username', clean_query),
+                        "name": getattr(user_data, 'name', clean_query),
+                        "profile_image_url": profile_image,
+                        "verified": getattr(user_data, 'verified', False) or getattr(user_data, 'isBlueVerified', False)
                     }]
                 }
             elif hasattr(user_obj, 'id'):
                 # HTTP client returns user directly
+                profile_image = getattr(user_obj, 'profile_image_url', '') or getattr(user_obj, 'profilePicture', '') or ''
                 return {
                     "users": [{
                         "id": str(user_obj.id),
                         "username": getattr(user_obj, 'username', clean_query),
                         "name": getattr(user_obj, 'name', clean_query),
-                        "profile_image_url": getattr(user_obj, 'profile_image_url', ''),
-                        "verified": getattr(user_obj, 'verified', False)
+                        "profile_image_url": profile_image,
+                        "verified": getattr(user_obj, 'verified', False) or getattr(user_obj, 'isBlueVerified', False)
                     }]
                 }
         

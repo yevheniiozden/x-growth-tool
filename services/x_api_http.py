@@ -134,12 +134,13 @@ class HTTPAPIClient:
         
         # Return object compatible with tweepy format
         # twitterapi.io uses camelCase field names
-        return type('User', (), {
+        user_obj_wrapper = type('User', (), {
             'data': type('UserData', (), {
                 'id': str(user_data.get('id', '')),
                 'username': user_data.get('userName', ''),  # camelCase
                 'name': user_data.get('name', ''),
                 'description': user_data.get('description', ''),
+                'profile_image_url': user_data.get('profilePicture', ''),  # API uses 'profilePicture'
                 'public_metrics': type('Metrics', (), {
                     'followers_count': user_data.get('followers', 0),  # API uses 'followers'
                     'following_count': user_data.get('following', 0),  # API uses 'following'
@@ -149,6 +150,15 @@ class HTTPAPIClient:
                 'verified': user_data.get('isBlueVerified', False)  # API uses 'isBlueVerified'
             })()
         })()
+        
+        # Also add direct attributes for easier access
+        user_obj_wrapper.id = user_obj_wrapper.data.id
+        user_obj_wrapper.username = user_obj_wrapper.data.username
+        user_obj_wrapper.name = user_obj_wrapper.data.name
+        user_obj_wrapper.profile_image_url = user_obj_wrapper.data.profile_image_url
+        user_obj_wrapper.verified = user_obj_wrapper.data.verified
+        
+        return user_obj_wrapper
     
     def get_users_tweets(
         self,
