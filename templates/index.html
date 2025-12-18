@@ -2220,7 +2220,7 @@
                         console.error('Search error:', error);
                         if (resultsDiv) resultsDiv.classList.add('hidden');
                     }
-                }, 150); // Reduced debounce from 300ms to 150ms for faster search
+                }, 50); // Reduced to 50ms for near-instant search feedback
             }
         });
         

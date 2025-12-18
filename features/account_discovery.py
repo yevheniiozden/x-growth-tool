@@ -393,51 +393,53 @@ def get_posts_for_onboarding(
                 like_count = getattr(metrics, 'like_count', 0)
                 reply_count = getattr(metrics, 'reply_count', 0)
                 retweet_count = getattr(metrics, 'retweet_count', 0)
+                view_count = getattr(metrics, 'view_count', 0)  # Impressions/views
             elif isinstance(metrics, dict):
                 like_count = metrics.get('like_count', 0)
                 reply_count = metrics.get('reply_count', 0)
                 retweet_count = metrics.get('retweet_count', 0)
+                view_count = metrics.get('view_count', 0)  # Impressions/views
             else:
                 like_count = 0
                 reply_count = 0
                 retweet_count = 0
+                view_count = 0
             
-            # Calculate relevance score using AI semantic analysis (with fallback)
-            semantic_relevance = 0.0
-            try:
-                from services.ai_service import client as ai_client
-                if ai_client:
-                    semantic_relevance = analyze_post_relevance(text, keywords)
-            except Exception as e:
-                # Silently fall back to keyword matching if AI fails
-                semantic_relevance = 0.0
-            
-            # Also calculate keyword-based relevance as fallback/boost
+            # Calculate relevance score using keyword matching (removed expensive AI calls)
+            # Simple but effective: check if keywords appear in text
             keyword_relevance_score = 0.0
+            keyword_matches = 0
             for keyword in keywords:
                 if keyword.lower() in text.lower():
                     relevance = keyword_relevance.get(keyword, 0.5)
                     keyword_relevance_score += relevance
+                    keyword_matches += 1
             
             # Normalize keyword relevance
             keyword_relevance_score = min(1.0, keyword_relevance_score / len(keywords)) if keywords else 0.0
             
-            # Combine semantic and keyword relevance (70% semantic, 30% keyword)
-            relevance_score = (semantic_relevance * 0.7) + (keyword_relevance_score * 0.3)
+            # Boost relevance if multiple keywords match
+            if keyword_matches > 1:
+                keyword_relevance_score = min(1.0, keyword_relevance_score * 1.2)
+            
+            relevance_score = keyword_relevance_score
             
             # Calculate total engagement
             total_engagement = like_count + reply_count + retweet_count
             
-            # Prioritize posts with significant traction - minimum engagement thresholds
-            # LOWERED thresholds to ensure we get posts - can be adjusted later
-            min_engagement = {
-                'like': 10,      # Lowered from 50 to 10 - posts for liking should have at least 10 likes
-                'reply': 20,     # Posts for replying should have at least 20 total engagement
-                'engage': 30,    # Lowered from 100 to 30 - posts for engagement should have at least 30 total engagement
-                'default': 5     # Lowered from 30 to 5 - default minimum for other types
-            }.get(post_type, 5)
+            # NEW ENGAGEMENT THRESHOLDS BASED ON VIEWS AND LIKES
+            # Categorize posts into tiers for diverse selection
+            # Tier 1 (20%): At least 1000 views and 10 likes
+            # Tier 2 (40%): At least 3000 views and 50 likes
+            # Tier 3 (40%): High engagement (above tier 2 thresholds)
             
-            if total_engagement < min_engagement:
+            engagement_tier = None
+            if view_count >= 3000 and like_count >= 50:
+                engagement_tier = 'high'  # Tier 3 - 40%
+            elif view_count >= 1000 and like_count >= 10:
+                engagement_tier = 'medium'  # Tier 1 or 2
+            else:
+                # Posts below minimum threshold - filter out
                 filtered_by_engagement += 1
                 continue
             
@@ -467,9 +469,9 @@ def get_posts_for_onboarding(
             
             post_url = f"https://twitter.com/{author_username}/status/{tweet_id}"
             
-            # Calculate popularity score (weighted engagement)
-            # Likes are most important, then replies, then retweets
-            popularity_score = (like_count * 1.0) + (reply_count * 1.5) + (retweet_count * 0.8)
+            # Calculate popularity score (weighted engagement + views)
+            # Views are important indicator of reach, likes show engagement quality
+            popularity_score = (like_count * 1.0) + (reply_count * 1.5) + (retweet_count * 0.8) + (view_count * 0.001)
             
             # Calculate quality score based on content signals
             quality_score = 0.0
@@ -487,10 +489,13 @@ def get_posts_for_onboarding(
             if author_verified:
                 quality_score += 0.1
             
-            # High engagement relative to account size (if we had follower data, would calculate engagement rate)
-            # For now, just boost posts with very high engagement
-            if total_engagement > 500:
-                quality_score += 0.1
+            # High engagement relative to views (engagement rate)
+            if view_count > 0:
+                engagement_rate = total_engagement / view_count
+                if engagement_rate > 0.05:  # 5%+ engagement rate is excellent
+                    quality_score += 0.2
+                elif engagement_rate > 0.02:  # 2%+ engagement rate is good
+                    quality_score += 0.1
             
             quality_score = min(1.0, quality_score)
             
@@ -506,10 +511,12 @@ def get_posts_for_onboarding(
                 'likes': like_count,
                 'replies': reply_count,
                 'retweets': retweet_count,
+                'views': view_count,  # Add views for reference
                 'relevance_score': relevance_score,
                 'popularity_score': popularity_score,
                 'quality_score': quality_score,
                 'total_engagement': total_engagement,
+                'engagement_tier': engagement_tier,  # Track tier for diverse selection
                 'type': post_type,
                 'url': post_url  # Always valid URL since we skip posts without usernames
             })
@@ -537,49 +544,63 @@ def get_posts_for_onboarding(
         # Sort by combined score
         posts.sort(key=lambda x: x['combined_score'], reverse=True)
         
-        # Implement diverse selection strategy:
-        # 30% highly relevant (top relevance scores)
-        # 30% highly popular (top popularity scores)
-        # 40% balanced (top combined scores)
+        # Implement diverse selection strategy based on engagement tiers:
+        # 20% Tier 1: 1000+ views, 10+ likes (medium engagement)
+        # 40% Tier 2: 3000+ views, 50+ likes (high engagement)
+        # 40% Tier 3: Above tier 2 thresholds (very high engagement)
         total_needed = max_results
-        highly_relevant_count = int(total_needed * 0.3)
-        highly_popular_count = int(total_needed * 0.3)
-        balanced_count = total_needed - highly_relevant_count - highly_popular_count
+        tier1_count = int(total_needed * 0.2)  # 20% - medium engagement
+        tier2_count = int(total_needed * 0.4)  # 40% - high engagement
+        tier3_count = total_needed - tier1_count - tier2_count  # 40% - very high engagement
         
-        # Sort by different criteria
-        by_relevance = sorted(posts, key=lambda x: x['relevance_score'], reverse=True)
-        by_popularity = sorted(posts, key=lambda x: x['normalized_popularity'], reverse=True)
-        by_combined = sorted(posts, key=lambda x: x['combined_score'], reverse=True)
+        # Separate posts by engagement tier
+        tier1_posts = [p for p in posts if p.get('engagement_tier') == 'medium']
+        tier2_posts = [p for p in posts if p.get('engagement_tier') == 'high']
         
-        # Select diverse mix
+        # Sort each tier by combined score (relevance + popularity + quality)
+        tier1_posts.sort(key=lambda x: x['combined_score'], reverse=True)
+        tier2_posts.sort(key=lambda x: x['combined_score'], reverse=True)
+        
+        # Select diverse mix from tiers
         selected_posts = []
         seen_ids = set()
         
-        # Add highly relevant posts
-        for post in by_relevance[:highly_relevant_count]:
+        # Add Tier 1 posts (20% - medium engagement)
+        for post in tier1_posts[:tier1_count]:
             if post['id'] not in seen_ids:
                 selected_posts.append(post)
                 seen_ids.add(post['id'])
         
-        # Add highly popular posts
-        for post in by_popularity[:highly_popular_count]:
+        # Add Tier 2 posts (40% - high engagement)
+        for post in tier2_posts[:tier2_count]:
             if post['id'] not in seen_ids:
                 selected_posts.append(post)
                 seen_ids.add(post['id'])
         
-        # Fill remaining with balanced posts
-        for post in by_combined:
-            if len(selected_posts) >= total_needed:
-                break
-            if post['id'] not in seen_ids:
-                selected_posts.append(post)
-                seen_ids.add(post['id'])
+        # Fill remaining with best available posts (prioritize tier 2, then tier 1)
+        remaining_needed = total_needed - len(selected_posts)
+        if remaining_needed > 0:
+            # Add more tier 2 posts if available
+            for post in tier2_posts:
+                if len(selected_posts) >= total_needed:
+                    break
+                if post['id'] not in seen_ids:
+                    selected_posts.append(post)
+                    seen_ids.add(post['id'])
+            
+            # Fill with tier 1 if still needed
+            for post in tier1_posts:
+                if len(selected_posts) >= total_needed:
+                    break
+                if post['id'] not in seen_ids:
+                    selected_posts.append(post)
+                    seen_ids.add(post['id'])
         
         # Sort final selection by combined score
         selected_posts.sort(key=lambda x: x['combined_score'], reverse=True)
         posts = selected_posts[:max_results]
         
-        print(f"Selected {len(posts)} posts using diverse selection strategy (relevance: {highly_relevant_count}, popularity: {highly_popular_count}, balanced: {balanced_count})")
+        print(f"Selected {len(posts)} posts using engagement tier strategy (tier1: {len([p for p in posts if p.get('engagement_tier') == 'medium'])}, tier2: {len([p for p in posts if p.get('engagement_tier') == 'high'])})")
         
         # Verify all posts have URLs (they should all have URLs since we skip posts without usernames)
         posts_with_urls = [p for p in posts if p.get('url')]

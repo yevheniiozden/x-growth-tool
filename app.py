@@ -514,7 +514,7 @@ async def search_users_endpoint(request: Request, query: str):
     if not query or len(query) < 1:  # Reduced from 2 to 1 for faster feedback
         return {"users": []}
     
-    # Check cache first
+    # Check cache first (instant return if cached)
     cached_result = _get_cached_user_search(query)
     if cached_result is not None:
         return cached_result
@@ -525,6 +525,10 @@ async def search_users_endpoint(request: Request, query: str):
     
     try:
         clean_query = query.replace('@', '').strip()
+        
+        # If query is very short, return empty to avoid unnecessary API calls
+        if len(clean_query) < 1:
+            return {"users": []}
         
         # Try direct user lookup first
         user_obj = client.get_user(username=clean_query)

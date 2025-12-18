@@ -361,6 +361,7 @@ class HTTPAPIClient:
             like_count = tweet_data.get('likeCount', 0)
             reply_count = tweet_data.get('replyCount', 0)
             retweet_count = tweet_data.get('retweetCount', 0)
+            view_count = tweet_data.get('viewCount', 0)  # Impressions/views
             
             tweet = type('Tweet', (), {
                 'id': str(tweet_id),
@@ -372,7 +373,8 @@ class HTTPAPIClient:
                 'public_metrics': type('Metrics', (), {
                     'like_count': like_count,
                     'reply_count': reply_count,
-                    'retweet_count': retweet_count
+                    'retweet_count': retweet_count,
+                    'view_count': view_count  # Add view count for engagement filtering
                 })()
             })()
             tweets.append(tweet)
