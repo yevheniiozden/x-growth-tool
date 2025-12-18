@@ -1477,12 +1477,25 @@
             
             errorDiv.innerHTML = '';
             
+            // Show loading state
+            const btn = document.querySelector('button[onclick="connectXAccount()"]');
+            const originalBtnText = btn ? btn.textContent : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Connecting...';
+            }
+            
             try {
                 const response = await fetch('/api/onboarding/connect-x', {
                     method: 'POST',
                     headers: getAuthHeaders(),
                     body: JSON.stringify({ x_username: username })
                 });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'Connection failed' }));
+                    throw new Error(errorData.detail || errorData.error || `HTTP ${response.status}`);
+                }
                 
                 const data = await response.json();
                 
@@ -1493,9 +1506,26 @@
                     showOnboardingStep(2);
                 } else {
                     errorDiv.innerHTML = `<div class="alert alert-error">${data.error || 'Connection failed'}</div>`;
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = originalBtnText;
+                    }
                 }
             } catch (error) {
-                errorDiv.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
+                console.error('Connect error:', error);
+                let errorMessage = 'Connection failed';
+                if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+                    errorMessage = 'Connection timed out. The X API is slow right now. Please try again.';
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Network error. Please check your connection and try again.';
+                } else {
+                    errorMessage = `Error: ${error.message}`;
+                }
+                errorDiv.innerHTML = `<div class="alert alert-error">${errorMessage}</div>`;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = originalBtnText;
+                }
             }
         }
         
@@ -1984,7 +2014,7 @@
                         console.error('Search error:', error);
                         if (resultsDiv) resultsDiv.classList.add('hidden');
                     }
-                }, 300);
+                }, 150); // Reduced debounce from 300ms to 150ms for faster search
             }
         });
         

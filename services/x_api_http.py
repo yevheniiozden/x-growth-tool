@@ -44,10 +44,22 @@ class HTTPAPIClient:
             print(f"Params: {params}")
         
         try:
-            if method == "GET":
-                response = requests.get(url, headers=self.headers, params=params, timeout=10)
-            else:
-                response = requests.request(method, url, headers=self.headers, json=params, timeout=10)
+            # Increased timeout to 30 seconds for slow API responses
+            # Also add retry logic for timeouts
+            max_retries = 2
+            for attempt in range(max_retries):
+                try:
+                    if method == "GET":
+                        response = requests.get(url, headers=self.headers, params=params, timeout=30)
+                    else:
+                        response = requests.request(method, url, headers=self.headers, json=params, timeout=30)
+                    break  # Success, exit retry loop
+                except requests.exceptions.ReadTimeout:
+                    if attempt < max_retries - 1:
+                        print(f"Request timeout, retrying ({attempt + 1}/{max_retries})...")
+                        continue
+                    else:
+                        raise
             
             # Log response details
             print(f"HTTP API Response: {response.status_code}")

@@ -561,8 +561,15 @@ async def connect_x_endpoint(request: Request):
         from onboarding_flow import connect_x_account
         result = connect_x_account(user.get("user_id"), x_username)
         return result
+    except requests.exceptions.ReadTimeout:
+        raise HTTPException(status_code=504, detail="Connection timed out. The X API is slow right now. Please try again.")
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=503, detail=f"Network error: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        if "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+            raise HTTPException(status_code=504, detail="Connection timed out. Please try again.")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @app.post("/api/onboarding/analyze-keywords")
