@@ -241,6 +241,49 @@
             margin-top: 0.5rem;
         }
         
+        .suggestion-tab {
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .suggestion-tab.active {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border-color: transparent;
+        }
+        
+        .suggestion-item {
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .suggestion-item:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .suggestion-item[data-selected="true"] {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.2);
+        }
+        
+        .suggestion-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
         /* Sections */
         .section {
             background: var(--glass);
@@ -668,7 +711,8 @@
                 const onboardingResponse = await fetch('/api/onboarding/step', {
                     headers: getAuthHeaders()
                 });
-                const onboardingData = await onboardingResponse.json();
+                const onboardingDataResponse = await onboardingResponse.json();
+                onboardingData = onboardingDataResponse;
                 
                 onboardingStep = onboardingData.step;
                 
@@ -707,8 +751,8 @@
                 content.innerHTML = `
                     <h2>🔗 Step 1: Connect Your X Account</h2>
                     <p style="color: var(--text-secondary); margin-bottom: 2rem;">
-                        To get started, we need to connect to your X (Twitter) account. 
-                        This allows us to analyze your activity and understand your unique voice.
+                        To get started, we need to authenticate and connect to your X (Twitter) account. 
+                        This allows us to access your profile and start using the X API.
                     </p>
                     <div class="form-group">
                         <label class="form-label">Your X Username</label>
@@ -724,41 +768,390 @@
                     <div id="step1-error" style="margin-top: 1rem;"></div>
                 `;
             } else if (step === 2 || step === '2') {
-                // Step 2: Analyze Activity
+                // Step 2: Keywords
                 content.innerHTML = `
-                    <h2>📊 Step 2: Analyze Your Activity</h2>
-                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">
-                        Great! Your X account is connected. Now we'll analyze your posts, likes, and engagement 
-                        to understand your unique voice and preferences.
+                    <h2>🔑 Step 2: Identify Your Interests</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        Help us understand what topics and keywords interest you. We'll use these to find 
+                        relevant accounts, posts, and content that match your preferences.
                     </p>
-                    <div id="step2-progress" class="hidden">
-                        <div class="progress-bar-container">
-                            <div id="step2-progress-bar" class="progress-bar-fill" style="width: 0%"></div>
-                        </div>
-                        <div id="step2-progress-text" class="progress-text">Starting analysis...</div>
+                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 1.5rem;">
+                        <strong>Please provide at least 3 keywords</strong> for better results. Examples: 
+                        "AI", "startups", "productivity", "design", "marketing"
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label">Keywords (comma-separated or one per line)</label>
+                        <textarea id="keywords-input" class="form-input" rows="5" 
+                                  placeholder="AI&#10;startups&#10;productivity"></textarea>
                     </div>
-                    <button class="btn btn-primary" onclick="analyzePersona()" style="width: 100%;" id="analyze-btn">
-                        Start Analysis
+                    <button class="btn btn-primary" onclick="saveKeywords()" style="width: 100%;" id="keywords-btn">
+                        Continue
                     </button>
                     <div id="step2-error" style="margin-top: 1rem;"></div>
                 `;
             } else if (step === 3 || step === '3') {
-                // Step 3: Complete
+                // Step 3: Relevance Sliders
+                const keywords = onboardingData?.keywords || [];
+                let slidersHTML = keywords.map((keyword, idx) => `
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <label style="color: var(--text-secondary); font-weight: 500;">${keyword}</label>
+                            <span id="slider-value-${idx}" style="color: var(--primary); font-weight: 600;">50%</span>
+                        </div>
+                        <input type="range" id="slider-${idx}" min="10" max="100" value="50" 
+                               oninput="updateSliderValue(${idx}, this.value)"
+                               style="width: 100%; height: 8px; border-radius: 4px; background: var(--bg-tertiary);">
+                    </div>
+                `).join('');
+                
                 content.innerHTML = `
-                    <h2>🎉 Step 3: You're All Set!</h2>
+                    <h2>🎚️ Step 3: Set Relevance Levels</h2>
                     <p style="color: var(--text-secondary); margin-bottom: 2rem;">
-                        Your persona has been created! Your AI brain is now learning your unique voice, 
-                        topics, and engagement style.
+                        Adjust the relevance level for each keyword. This helps us prioritize content 
+                        and accounts that match your interests.
+                    </p>
+                    <div id="sliders-container">
+                        ${slidersHTML}
+                    </div>
+                    <button class="btn btn-primary" onclick="saveRelevance()" style="width: 100%;" id="relevance-btn">
+                        Continue
+                    </button>
+                    <div id="step3-error" style="margin-top: 1rem;"></div>
+                `;
+            } else if (step === 4 || step === '4') {
+                // Step 4: Following Onboarding
+                content.innerHTML = `
+                    <h2>🎯 Step 4: Discover & Engage</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                        Based on your interests, we've found accounts and content you might like. 
+                        Select what interests you to help us learn your preferences.
+                    </p>
+                    <div id="step4-loading" style="text-align: center; padding: 2rem;">
+                        <div class="spinner"></div>
+                        <p style="color: var(--text-secondary); margin-top: 1rem;">Loading suggestions...</p>
+                    </div>
+                    <div id="step4-content" class="hidden">
+                        <div id="suggestions-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                            <button class="suggestion-tab active" onclick="showSuggestionTab('accounts')">👥 Accounts</button>
+                            <button class="suggestion-tab" onclick="showSuggestionTab('likes')">❤️ Posts to Like</button>
+                            <button class="suggestion-tab" onclick="showSuggestionTab('replies')">💬 Posts to Reply</button>
+                            <button class="suggestion-tab" onclick="showSuggestionTab('engage')">🔥 Posts to Engage</button>
+                        </div>
+                        <div id="suggestions-content" style="max-height: 500px; overflow-y: auto;"></div>
+                        <button class="btn btn-primary" onclick="saveOnboardingChoices()" style="width: 100%; margin-top: 1.5rem;" id="choices-btn">
+                            Complete Onboarding
+                        </button>
+                    </div>
+                    <div id="step4-error" style="margin-top: 1rem;"></div>
+                `;
+                loadOnboardingSuggestions();
+            } else if (step === 5 || step === '5' || step === 'complete') {
+                // Step 5: Complete
+                content.innerHTML = `
+                    <h2>🎉 Onboarding Complete!</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                        Your AI brain is now ready! We've learned about your interests, preferences, 
+                        and engagement style. You can now use all features of the tool.
                     </p>
                     <div class="alert alert-success" style="margin-bottom: 2rem;">
-                        ✅ Persona analysis complete<br>
-                        ✅ Your AI brain is ready<br>
-                        ✅ You can now use all features
+                        ✅ X account connected<br>
+                        ✅ Interests identified<br>
+                        ✅ Preferences saved<br>
+                        ✅ AI brain initialized
                     </div>
                     <button class="btn btn-primary" onclick="completeOnboarding()" style="width: 100%;">
                         Get Started
                     </button>
                 `;
+            }
+        }
+        
+        let onboardingData = {};
+        let onboardingSuggestions = {};
+        let selectedAccounts = new Set();
+        let selectedLikes = new Set();
+        let selectedReplies = new Set();
+        let selectedEngage = new Set();
+        
+        function updateSliderValue(idx, value) {
+            document.getElementById(`slider-value-${idx}`).textContent = value + '%';
+        }
+        
+        async function saveKeywords() {
+            const input = document.getElementById('keywords-input').value.trim();
+            const errorDiv = document.getElementById('step2-error');
+            const btn = document.getElementById('keywords-btn');
+            
+            if (!input) {
+                errorDiv.innerHTML = '<div class="alert alert-error">Please enter at least 3 keywords</div>';
+                return;
+            }
+            
+            // Parse keywords (comma or newline separated)
+            const keywords = input.split(/[,\n]/)
+                .map(k => k.trim())
+                .filter(k => k.length > 0);
+            
+            if (keywords.length < 3) {
+                errorDiv.innerHTML = '<div class="alert alert-error">Please provide at least 3 keywords</div>';
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            errorDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/onboarding/keywords', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ keywords })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    onboardingData.keywords = data.keywords;
+                    showOnboardingStep(3);
+                } else {
+                    errorDiv.innerHTML = `<div class="alert alert-error">${data.error || 'Failed to save keywords'}</div>`;
+                    btn.disabled = false;
+                    btn.textContent = 'Continue';
+                }
+            } catch (error) {
+                errorDiv.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
+                btn.disabled = false;
+                btn.textContent = 'Continue';
+            }
+        }
+        
+        async function saveRelevance() {
+            const keywords = onboardingData.keywords || [];
+            const keyword_relevance = {};
+            
+            keywords.forEach((keyword, idx) => {
+                const slider = document.getElementById(`slider-${idx}`);
+                if (slider) {
+                    keyword_relevance[keyword] = parseInt(slider.value) / 100; // Convert to 0.1-1.0
+                }
+            });
+            
+            const btn = document.getElementById('relevance-btn');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            
+            try {
+                const response = await fetch('/api/onboarding/relevance', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ keyword_relevance })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    onboardingData.keyword_relevance = keyword_relevance;
+                    showOnboardingStep(4);
+                } else {
+                    document.getElementById('step3-error').innerHTML = 
+                        `<div class="alert alert-error">${data.error || 'Failed to save preferences'}</div>`;
+                    btn.disabled = false;
+                    btn.textContent = 'Continue';
+                }
+            } catch (error) {
+                document.getElementById('step3-error').innerHTML = 
+                    `<div class="alert alert-error">Error: ${error.message}</div>`;
+                btn.disabled = false;
+                btn.textContent = 'Continue';
+            }
+        }
+        
+        async function loadOnboardingSuggestions() {
+            try {
+                const response = await fetch('/api/onboarding/suggestions', {
+                    headers: getAuthHeaders()
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    onboardingSuggestions = data;
+                    document.getElementById('step4-loading').classList.add('hidden');
+                    document.getElementById('step4-content').classList.remove('hidden');
+                    showSuggestionTab('accounts');
+                } else {
+                    document.getElementById('step4-error').innerHTML = 
+                        `<div class="alert alert-error">${data.error || 'Failed to load suggestions'}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('step4-error').innerHTML = 
+                    `<div class="alert alert-error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        function showSuggestionTab(tab) {
+            // Update tabs
+            document.querySelectorAll('.suggestion-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            const content = document.getElementById('suggestions-content');
+            
+            if (tab === 'accounts') {
+                const accounts = onboardingSuggestions.accounts || [];
+                content.innerHTML = accounts.map(acc => `
+                    <div class="suggestion-item" onclick="toggleSelection('account', '${acc.id}')" 
+                         data-selected="${selectedAccounts.has(acc.id)}">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <input type="checkbox" ${selectedAccounts.has(acc.id) ? 'checked' : ''} 
+                                   onchange="toggleSelection('account', '${acc.id}')">
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <strong>@${acc.username}</strong>
+                                    ${acc.verified ? '<span style="color: var(--primary);">✓</span>' : ''}
+                                </div>
+                                <p style="color: var(--text-secondary); font-size: 14px; margin: 0.25rem 0;">
+                                    ${acc.description || 'No description'}
+                                </p>
+                                <div style="display: flex; gap: 1rem; font-size: 12px; color: var(--text-muted);">
+                                    <span>👥 ${acc.followers?.toLocaleString() || 0} followers</span>
+                                    <span>📊 ${(acc.relevance_score * 100).toFixed(0)}% relevant</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') || '<p style="color: var(--text-muted);">No accounts found</p>';
+            } else if (tab === 'likes') {
+                const posts = onboardingSuggestions.posts_to_like || [];
+                content.innerHTML = posts.map(post => `
+                    <div class="suggestion-item" onclick="toggleSelection('like', '${post.id}')" 
+                         data-selected="${selectedLikes.has(post.id)}">
+                        <div style="display: flex; align-items: start; gap: 1rem;">
+                            <input type="checkbox" ${selectedLikes.has(post.id) ? 'checked' : ''} 
+                                   onchange="toggleSelection('like', '${post.id}')">
+                            <div style="flex: 1;">
+                                <p style="margin: 0 0 0.5rem 0;">${post.text}</p>
+                                <div style="display: flex; gap: 1rem; font-size: 12px; color: var(--text-muted);">
+                                    <span>@${post.author_username || 'unknown'}</span>
+                                    <span>❤️ ${post.likes || 0}</span>
+                                    <span>💬 ${post.replies || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') || '<p style="color: var(--text-muted);">No posts found</p>';
+            } else if (tab === 'replies') {
+                const posts = onboardingSuggestions.posts_to_reply || [];
+                content.innerHTML = posts.map(post => `
+                    <div class="suggestion-item" onclick="toggleSelection('reply', '${post.id}')" 
+                         data-selected="${selectedReplies.has(post.id)}">
+                        <div style="display: flex; align-items: start; gap: 1rem;">
+                            <input type="checkbox" ${selectedReplies.has(post.id) ? 'checked' : ''} 
+                                   onchange="toggleSelection('reply', '${post.id}')">
+                            <div style="flex: 1;">
+                                <p style="margin: 0 0 0.5rem 0;">${post.text}</p>
+                                <div style="display: flex; gap: 1rem; font-size: 12px; color: var(--text-muted);">
+                                    <span>@${post.author_username || 'unknown'}</span>
+                                    <span>❤️ ${post.likes || 0}</span>
+                                    <span>💬 ${post.replies || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') || '<p style="color: var(--text-muted);">No posts found</p>';
+            } else if (tab === 'engage') {
+                const posts = onboardingSuggestions.posts_to_engage || [];
+                content.innerHTML = posts.map(post => `
+                    <div class="suggestion-item" onclick="toggleSelection('engage', '${post.id}')" 
+                         data-selected="${selectedEngage.has(post.id)}">
+                        <div style="display: flex; align-items: start; gap: 1rem;">
+                            <input type="checkbox" ${selectedEngage.has(post.id) ? 'checked' : ''} 
+                                   onchange="toggleSelection('engage', '${post.id}')">
+                            <div style="flex: 1;">
+                                <p style="margin: 0 0 0.5rem 0;">${post.text}</p>
+                                <div style="display: flex; gap: 1rem; font-size: 12px; color: var(--text-muted);">
+                                    <span>@${post.author_username || 'unknown'}</span>
+                                    <span>❤️ ${post.likes || 0}</span>
+                                    <span>💬 ${post.replies || 0}</span>
+                                    <span>🔥 ${post.retweets || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') || '<p style="color: var(--text-muted);">No posts found</p>';
+            }
+        }
+        
+        function toggleSelection(type, id) {
+            if (type === 'account') {
+                if (selectedAccounts.has(id)) {
+                    selectedAccounts.delete(id);
+                } else {
+                    selectedAccounts.add(id);
+                }
+            } else if (type === 'like') {
+                if (selectedLikes.has(id)) {
+                    selectedLikes.delete(id);
+                } else {
+                    selectedLikes.add(id);
+                }
+            } else if (type === 'reply') {
+                if (selectedReplies.has(id)) {
+                    selectedReplies.delete(id);
+                } else {
+                    selectedReplies.add(id);
+                }
+            } else if (type === 'engage') {
+                if (selectedEngage.has(id)) {
+                    selectedEngage.delete(id);
+                } else {
+                    selectedEngage.add(id);
+                }
+            }
+            
+            // Update visual state
+            const item = event.target.closest('.suggestion-item');
+            if (item) {
+                item.setAttribute('data-selected', 
+                    (type === 'account' && selectedAccounts.has(id)) ||
+                    (type === 'like' && selectedLikes.has(id)) ||
+                    (type === 'reply' && selectedReplies.has(id)) ||
+                    (type === 'engage' && selectedEngage.has(id))
+                );
+            }
+        }
+        
+        async function saveOnboardingChoices() {
+            const btn = document.getElementById('choices-btn');
+            btn.disabled = true;
+            btn.textContent = 'Completing...';
+            
+            try {
+                const response = await fetch('/api/onboarding/choices', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        followed_accounts: Array.from(selectedAccounts),
+                        liked_posts: Array.from(selectedLikes),
+                        replied_posts: Array.from(selectedReplies),
+                        engaged_posts: Array.from(selectedEngage)
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showOnboardingStep('complete');
+                } else {
+                    document.getElementById('step4-error').innerHTML = 
+                        `<div class="alert alert-error">${data.error || 'Failed to complete onboarding'}</div>`;
+                    btn.disabled = false;
+                    btn.textContent = 'Complete Onboarding';
+                }
+            } catch (error) {
+                document.getElementById('step4-error').innerHTML = 
+                    `<div class="alert alert-error">Error: ${error.message}</div>`;
+                btn.disabled = false;
+                btn.textContent = 'Complete Onboarding';
             }
         }
         
@@ -795,60 +1188,6 @@
             }
         }
         
-        async function analyzePersona() {
-            const progressDiv = document.getElementById('step2-progress');
-            const progressBar = document.getElementById('step2-progress-bar');
-            const progressText = document.getElementById('step2-progress-text');
-            const analyzeBtn = document.getElementById('analyze-btn');
-            const errorDiv = document.getElementById('step2-error');
-            
-            progressDiv.classList.remove('hidden');
-            analyzeBtn.disabled = true;
-            analyzeBtn.textContent = 'Analyzing...';
-            errorDiv.innerHTML = '';
-            
-            progressBar.style.width = '20%';
-            progressText.textContent = 'Fetching your posts...';
-            
-            try {
-                progressBar.style.width = '40%';
-                progressText.textContent = 'Analyzing your likes...';
-                
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                
-                progressBar.style.width = '60%';
-                progressText.textContent = 'Understanding your engagement style...';
-                
-                const response = await fetch('/api/onboarding/analyze', {
-                    method: 'POST',
-                    headers: getAuthHeaders()
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    progressBar.style.width = '80%';
-                    progressText.textContent = 'Creating your persona...';
-                    
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    
-                    progressBar.style.width = '100%';
-                    progressText.textContent = 'Analysis complete!';
-                    
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    
-                    showOnboardingStep(3);
-                } else {
-                    errorDiv.innerHTML = `<div class="alert alert-error">${data.error || 'Analysis failed'}</div>`;
-                    analyzeBtn.disabled = false;
-                    analyzeBtn.textContent = 'Start Analysis';
-                }
-            } catch (error) {
-                errorDiv.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
-                analyzeBtn.disabled = false;
-                analyzeBtn.textContent = 'Start Analysis';
-            }
-        }
         
         async function completeOnboarding() {
             try {

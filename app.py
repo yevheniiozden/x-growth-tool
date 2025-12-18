@@ -459,31 +459,74 @@ async def connect_x_endpoint(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/onboarding/analyze")
-async def analyze_persona_endpoint(request: Request):
-    """Step 2: Analyze persona from X activity"""
+@app.post("/api/onboarding/keywords")
+async def save_keywords_endpoint(request: Request):
+    """Step 2: Save user keywords"""
     user = await get_current_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     try:
-        from onboarding_flow import run_persona_analysis
-        result = run_persona_analysis(user.get("user_id"))
+        data = await request.json()
+        keywords = data.get("keywords", [])
+        
+        from onboarding_flow import save_keywords
+        result = save_keywords(user.get("user_id"), keywords)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/onboarding/complete")
-async def complete_onboarding_endpoint(request: Request):
-    """Complete onboarding"""
+@app.post("/api/onboarding/relevance")
+async def save_relevance_endpoint(request: Request):
+    """Step 3: Save keyword relevance preferences"""
     user = await get_current_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     try:
-        from onboarding_flow import complete_onboarding
-        result = complete_onboarding(user.get("user_id"))
+        data = await request.json()
+        keyword_relevance = data.get("keyword_relevance", {})
+        
+        from onboarding_flow import save_keyword_relevance
+        result = save_keyword_relevance(user.get("user_id"), keyword_relevance)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/onboarding/suggestions")
+async def get_suggestions_endpoint(request: Request):
+    """Step 4: Get onboarding suggestions"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        from onboarding_flow import get_onboarding_suggestions
+        result = get_onboarding_suggestions(user.get("user_id"))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/choices")
+async def save_choices_endpoint(request: Request):
+    """Step 4: Save onboarding choices and complete"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        data = await request.json()
+        from onboarding_flow import save_onboarding_choices
+        result = save_onboarding_choices(
+            user.get("user_id"),
+            data.get("followed_accounts", []),
+            data.get("liked_posts", []),
+            data.get("replied_posts", []),
+            data.get("engaged_posts", [])
+        )
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
