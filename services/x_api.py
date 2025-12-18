@@ -157,14 +157,15 @@ def get_user_timeline(
     except Exception as e:
         error_msg = str(e)
         # If we get 401 and using tweepy, try switching to HTTP client
-        if ("401" in error_msg or "Unauthorized" in error_msg) and not use_http_client:
+        # Import the module to access module-level variables
+        import services.x_api as x_api_module
+        if ("401" in error_msg or "Unauthorized" in error_msg) and not x_api_module.use_http_client:
             print(f"Tweepy authentication failed: {e}")
             print("Switching to HTTP client for twitterapi.io")
             try:
                 from services.x_api_http import HTTPAPIClient
-                global client, use_http_client
-                client = HTTPAPIClient(api_key)
-                use_http_client = True
+                x_api_module.client = HTTPAPIClient(api_key)
+                x_api_module.use_http_client = True
                 print("Using HTTP client for twitterapi.io")
                 # Retry the call with HTTP client
                 return get_user_timeline(username, user_id, days_back, max_results)
