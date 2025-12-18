@@ -310,26 +310,56 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
             print(f"Error loading cached posts from {cache_file}: {e}")
             pass
     
-    # If no cached posts, fetch them
+    # If no cached posts, check if background task is still preparing data
     if not posts:
-        print(f"No cached posts found for phase {phase}, fetching new posts...")
-        if phase == 1:
-            posts = get_posts_for_onboarding(keywords, keyword_relevance, 'like', 20)
-        elif phase == 2:
-            posts = get_posts_for_onboarding(keywords, keyword_relevance, 'reply', 10)
-        elif phase == 3:
-            posts = get_posts_for_onboarding(keywords, keyword_relevance, 'engage', 20)
+        data_preparing = interactive.get("data_preparing", False)
+        if data_preparing:
+            # Background task is still running - return placeholder and let user wait
+            print(f"No cached posts found for phase {phase}, background task is preparing data...")
+            return {
+                "success": True,
+                "post": {
+                    "id": f"loading_{phase}",
+                    "text": "Loading posts... Please wait a moment while we fetch relevant content for you.",
+                    "author_username": "system",
+                    "likes": 0,
+                    "replies": 0,
+                    "relevance_score": 0.5,
+                    "url": None
+                },
+                "index": 0,
+                "total": 1,
+                "loading": True
+            }
         
-        print(f"Fetched {len(posts)} posts for phase {phase}")
-        
-        # Cache posts
-        if posts:
-            try:
-                with open(cache_file, 'w', encoding='utf-8') as f:
-                    json.dump(posts, f, indent=2, ensure_ascii=False)
-                print(f"Cached {len(posts)} posts to {cache_file}")
-            except Exception as e:
-                print(f"Error caching posts to {cache_file}: {e}")
+        # Background task completed but no posts - try quick fetch with simpler queries
+        print(f"No cached posts found for phase {phase}, attempting quick fetch...")
+        try:
+            # Use simpler, faster queries (no AI expansion to speed up)
+            from features.account_discovery import get_posts_for_onboarding
+            
+            if phase == 1:
+                posts = get_posts_for_onboarding(keywords, keyword_relevance, 'like', 20)
+            elif phase == 2:
+                posts = get_posts_for_onboarding(keywords, keyword_relevance, 'reply', 10)
+            elif phase == 3:
+                posts = get_posts_for_onboarding(keywords, keyword_relevance, 'engage', 20)
+            
+            print(f"Quick fetch returned {len(posts)} posts for phase {phase}")
+            
+            # Cache posts if we got any
+            if posts:
+                try:
+                    with open(cache_file, 'w', encoding='utf-8') as f:
+                        json.dump(posts, f, indent=2, ensure_ascii=False)
+                    print(f"Cached {len(posts)} posts to {cache_file}")
+                except Exception as e:
+                    print(f"Error caching posts to {cache_file}: {e}")
+        except Exception as e:
+            print(f"Error fetching posts for phase {phase}: {e}")
+            import traceback
+            traceback.print_exc()
+            posts = []  # Empty list - will return placeholder below
     
     # Filter out posts without URLs (they can't be embedded)
     posts_with_urls = [p for p in posts if p.get('url')]

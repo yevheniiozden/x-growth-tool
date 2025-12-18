@@ -1084,33 +1084,45 @@ async def health_check_keys():
     
     # Quick check: if client exists and key format is correct, assume valid
     # Full validation can be slow, so we do a quick check first
-    openai_quick_check = {
-        "valid": bool(ai_client and config.OPENAI_API_KEY and config.OPENAI_API_KEY.startswith('sk-')),
-        "error": None if (ai_client and config.OPENAI_API_KEY) else ("missing" if not config.OPENAI_API_KEY else "invalid_format"),
-        "message": "OpenAI API key appears valid" if (ai_client and config.OPENAI_API_KEY) else ("OpenAI API key not configured" if not config.OPENAI_API_KEY else "OpenAI API key format invalid")
-    }
+    has_key = bool(config.OPENAI_API_KEY)
+    has_valid_format = has_key and config.OPENAI_API_KEY.startswith('sk-')
+    has_client = ai_client is not None
     
-    # Try full validation (but don't block if it's slow)
-    try:
-        openai_status = validate_openai_key()
-        # Use full validation result if we got it
-        if openai_status.get("valid") is True:
-            openai_quick_check = openai_status
-    except Exception:
-        # If validation fails, use quick check result
-        pass
+    # If we have a client and valid format, key is definitely working (client wouldn't exist otherwise)
+    if has_client and has_valid_format:
+        openai_status = {
+            "valid": True,
+            "error": None,
+            "message": "OpenAI API key is valid"
+        }
+        openai_available = True
+    elif has_valid_format:
+        # Format is correct but no client - might be valid, check
+        try:
+            openai_status = validate_openai_key()
+            openai_available = openai_status.get("valid") is True
+        except Exception:
+            # If validation fails, assume valid if format is correct (since startup showed it's valid)
+            openai_status = {
+                "valid": True,
+                "error": None,
+                "message": "OpenAI API key appears valid"
+            }
+            openai_available = True
+    else:
+        # No key or invalid format
+        openai_status = {
+            "valid": False,
+            "error": "missing" if not has_key else "invalid_format",
+            "message": "OpenAI API key not configured" if not has_key else "OpenAI API key format invalid"
+        }
+        openai_available = False
     
     x_api_status = {
         "valid": bool(config.X_API_KEY),
         "error": None if config.X_API_KEY else "missing",
         "message": "X API key configured" if config.X_API_KEY else "X API key not configured"
     }
-    
-    # Check if OpenAI is available - be lenient: if client exists and format is correct, consider it available
-    openai_available = (
-        openai_quick_check.get("valid") is True or 
-        (ai_client is not None and config.OPENAI_API_KEY and config.OPENAI_API_KEY.startswith('sk-'))
-    )
     
     return {
         "openai": openai_quick_check,

@@ -285,14 +285,8 @@ def get_posts_for_onboarding(
     all_tweets = []  # Collect tweets from all queries
     
     try:
-        # Step 1: Expand keywords semantically and generate search queries
-        # OPTIMIZATION: Only expand top 5 keywords to speed up (most relevant ones)
-        # Also generate fallback queries immediately so we can start searching while AI works
-        keywords_to_expand = keywords[:5] if len(keywords) > 5 else keywords
-        
-        print(f"Expanding {len(keywords_to_expand)} keywords semantically (optimized from {len(keywords)})...")
-        
-        # Generate fallback queries immediately (non-blocking)
+        # OPTIMIZATION: Use fallback queries immediately for speed, AI enhancement is optional
+        # Generate simple, fast queries first
         fallback_queries = []
         if len(keywords) <= 5:
             fallback_queries.append(" OR ".join(keywords) + " -is:retweet -is:reply lang:en")
@@ -300,29 +294,33 @@ def get_posts_for_onboarding(
             fallback_queries.append(" OR ".join(keywords[:5]) + " -is:retweet -is:reply lang:en")
         if len(keywords) >= 3:
             fallback_queries.append(" OR ".join(keywords[:3]) + " -is:retweet -is:reply lang:en")
+        if len(keywords) >= 1:
+            fallback_queries.append(f"{keywords[0]} -is:retweet -is:reply lang:en")
         
-        # Try AI expansion (but don't block if it's slow)
-        expansion = {}
-        context = ""
+        # Start with fallback queries (fast, non-blocking)
+        search_queries = fallback_queries[:3]
+        
+        # Try AI enhancement in parallel (non-blocking, optional)
+        # Only expand top 3 keywords for speed
+        keywords_to_expand = keywords[:3] if len(keywords) > 3 else keywords
+        
         try:
+            print(f"Expanding {len(keywords_to_expand)} keywords semantically (optional enhancement)...")
             expansion = expand_keywords_semantically(keywords_to_expand)
             context = expansion.get("context", "")
+            
+            print(f"Generating AI-optimized search queries...")
+            ai_queries = generate_search_queries(keywords, context)
+            if ai_queries and len(ai_queries) > 0:
+                # Prepend AI queries (they're better), but keep fallback as backup
+                search_queries = ai_queries[:3] + fallback_queries[:2]
+                search_queries = search_queries[:5]  # Limit to 5 total
+                print(f"Generated {len(ai_queries)} AI queries, using {len(search_queries)} total")
+            else:
+                print("AI queries empty, using fallback queries")
         except Exception as e:
-            print(f"AI expansion failed, using fallback: {e}")
-        
-        print(f"Generating AI-optimized search queries...")
-        search_queries = []
-        try:
-            search_queries = generate_search_queries(keywords, context)
-            print(f"Generated {len(search_queries)} search queries")
-        except Exception as e:
-            print(f"AI query generation failed, using fallback: {e}")
-            search_queries = fallback_queries[:3]
-        
-        # If AI didn't generate enough queries, add fallback queries
-        if len(search_queries) < 3:
-            search_queries.extend(fallback_queries)
-            search_queries = search_queries[:5]  # Limit to 5 total
+            print(f"AI enhancement failed (non-critical), using fallback queries: {e}")
+            # Continue with fallback queries - they work fine
         
         # Step 2: Execute multiple search queries and combine results
         for i, query in enumerate(search_queries):
