@@ -772,6 +772,79 @@ async def complete_interactive_endpoint(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/onboarding/oembed")
+async def get_oembed_endpoint(request: Request, url: str):
+    """Get X/Twitter oEmbed HTML for a post URL"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        import re
+        # Extract tweet ID from URL
+        tweet_id_match = re.search(r'/status/(\d+)', url)
+        if not tweet_id_match:
+            return {
+                "success": False,
+                "error": "Could not extract tweet ID from URL",
+                "html": None
+            }
+        
+        tweet_id = tweet_id_match.group(1)
+        
+        # Try X/Twitter oEmbed API first
+        oembed_url = "https://publish.twitter.com/oembed"
+        params = {
+            "url": url,
+            "omit_script": "true",
+            "theme": "dark",
+            "dnt": "true",
+            "align": "center"
+        }
+        
+        try:
+            response = requests.get(oembed_url, params=params, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                html = data.get("html", "")
+                
+                # Verify we got valid HTML
+                if html and ('<blockquote' in html or 'twitter-tweet' in html):
+                    return {
+                        "success": True,
+                        "html": html,
+                        "width": data.get("width"),
+                        "height": data.get("height"),
+                        "url": url
+                    }
+        except Exception as e:
+            print(f"oEmbed API error: {e}")
+        
+        # Fallback: Construct embed HTML manually
+        # This ensures we always get a proper embed structure
+        html = f'''<blockquote class="twitter-tweet" data-theme="dark" data-dnt="true">
+            <p lang="en" dir="ltr"></p>
+            <a href="{url}"></a>
+        </blockquote>'''
+        
+        return {
+            "success": True,
+            "html": html,
+            "width": 550,
+            "height": None,
+            "url": url
+        }
+    except Exception as e:
+        print(f"Error fetching oEmbed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e),
+            "html": None
+        }
+
+
 # Interactive Onboarding API
 @app.get("/api/onboarding/interactive/status")
 async def get_interactive_status_endpoint(request: Request):
