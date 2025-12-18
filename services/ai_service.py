@@ -593,22 +593,21 @@ def generate_search_queries(keywords: List[str], context: str = "") -> List[str]
         return fallback_queries[:3]
     
     # Try to use AI for enhanced queries
-    try:
-        # First expand keywords semantically
-        expansion = expand_keywords_semantically(keywords)
-        expanded_keywords = expansion.get("expanded_keywords", {})
-        themes = expansion.get("themes", [])
-        
-        # Collect all terms
-        all_terms = []
-        for keyword, expansions in expanded_keywords.items():
-            all_terms.extend([keyword] + expansions[:3])  # Limit expansions per keyword
-        
-        # Add themes as additional search terms
-        all_terms.extend(themes[:5])
-        
-        # Generate multiple query variations
-        prompt = f"""Generate 3-5 optimized search queries for X/Twitter API based on these keywords and context.
+    # First expand keywords semantically
+    expansion = expand_keywords_semantically(keywords)
+    expanded_keywords = expansion.get("expanded_keywords", {})
+    themes = expansion.get("themes", [])
+    
+    # Collect all terms
+    all_terms = []
+    for keyword, expansions in expanded_keywords.items():
+        all_terms.extend([keyword] + expansions[:3])  # Limit expansions per keyword
+    
+    # Add themes as additional search terms
+    all_terms.extend(themes[:5])
+    
+    # Generate multiple query variations
+    prompt = f"""Generate 3-5 optimized search queries for X/Twitter API based on these keywords and context.
 
 Keywords: {', '.join(keywords)}
 Context: {context if context else 'General content discovery'}
@@ -629,75 +628,75 @@ Each query should:
 Return JSON with:
 {{"queries": ["query1", "query2", "query3", ...]}}
 """
-        
-        # Retry logic for transient failures
-        max_retries = 2
-        retry_delay = 1.0
-        
-        for attempt in range(max_retries + 1):
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are an expert at creating optimized X/Twitter search queries. Generate diverse, effective queries that find relevant and popular content."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.8,
-                    max_tokens=500,
-                    response_format={"type": "json_object"}
-                )
+    
+    # Retry logic for transient failures
+    max_retries = 2
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert at creating optimized X/Twitter search queries. Generate diverse, effective queries that find relevant and popular content."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.8,
+                max_tokens=500,
+                response_format={"type": "json_object"}
+            )
+            
+            import json
+            result = json.loads(response.choices[0].message.content)
+            
+            queries = result.get("queries", [])
+            if queries and len(queries) > 0:
+                # Validate queries have proper format
+                validated_queries = []
+                for q in queries:
+                    if isinstance(q, str) and len(q) > 0:
+                        # Ensure query has required filters
+                        if "-is:retweet" not in q:
+                            q += " -is:retweet"
+                        if "-is:reply" not in q:
+                            q += " -is:reply"
+                        if "lang:en" not in q:
+                            q += " lang:en"
+                        validated_queries.append(q)
                 
-                import json
-                result = json.loads(response.choices[0].message.content)
-                
-                queries = result.get("queries", [])
-                if queries and len(queries) > 0:
-                    # Validate queries have proper format
-                    validated_queries = []
-                    for q in queries:
-                        if isinstance(q, str) and len(q) > 0:
-                            # Ensure query has required filters
-                            if "-is:retweet" not in q:
-                                q += " -is:retweet"
-                            if "-is:reply" not in q:
-                                q += " -is:reply"
-                            if "lang:en" not in q:
-                                q += " lang:en"
-                            validated_queries.append(q)
-                    
-                    if validated_queries:
-                        return validated_queries[:5]  # Limit to 5 queries max
-                
-                # If AI queries invalid, use fallback
-                print("AI-generated queries invalid, using fallback queries")
-                return fallback_queries[:3]
-            except openai.AuthenticationError as e:
-                # Invalid API key - don't retry
-                print(f"OpenAI API authentication error: {e}")
-                print("Please check your OPENAI_API_KEY in environment variables")
+                if validated_queries:
+                    return validated_queries[:5]  # Limit to 5 queries max
+            
+            # If AI queries invalid, use fallback
+            print("AI-generated queries invalid, using fallback queries")
+            return fallback_queries[:3]
+        except openai.AuthenticationError as e:
+            # Invalid API key - don't retry
+            print(f"OpenAI API authentication error: {e}")
+            print("Please check your OPENAI_API_KEY in environment variables")
+            break
+        except openai.RateLimitError as e:
+            # Rate limit - retry with backoff
+            if attempt < max_retries:
+                wait_time = retry_delay * (2 ** attempt)
+                print(f"OpenAI rate limit hit, retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            else:
+                print(f"OpenAI rate limit error after {max_retries} retries: {e}")
                 break
-            except openai.RateLimitError as e:
-                # Rate limit - retry with backoff
-                if attempt < max_retries:
-                    wait_time = retry_delay * (2 ** attempt)
-                    print(f"OpenAI rate limit hit, retrying in {wait_time}s...")
-                    time.sleep(wait_time)
-                    continue
-                else:
-                    print(f"OpenAI rate limit error after {max_retries} retries: {e}")
-                    break
-            except Exception as e:
-                # Other errors - retry once
-                if attempt < max_retries:
-                    print(f"Error generating search queries with AI (attempt {attempt + 1}), retrying...: {e}")
-                    time.sleep(retry_delay)
-                    continue
-                else:
-                    print(f"Error generating search queries with AI after {max_retries} retries: {e}")
-                    break
-        
-        # Fallback: use basic queries
-        return fallback_queries[:3]
+        except Exception as e:
+            # Other errors - retry once
+            if attempt < max_retries:
+                print(f"Error generating search queries with AI (attempt {attempt + 1}), retrying...: {e}")
+                time.sleep(retry_delay)
+                continue
+            else:
+                print(f"Error generating search queries with AI after {max_retries} retries: {e}")
+                break
+    
+    # Fallback: use basic queries
+    return fallback_queries[:3]
 
 
 def analyze_post_relevance(post_text: str, keywords: List[str]) -> float:
