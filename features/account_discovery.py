@@ -282,3 +282,91 @@ def get_posts_for_onboarding(
         print(f"Error getting posts for onboarding: {e}")
         return []
 
+
+def get_account_feed(account_id: str, max_posts: int = 20) -> List[Dict[str, Any]]:
+    """
+    Get full profile feed for an account
+    
+    Args:
+        account_id: Account/user ID
+        max_posts: Maximum number of posts to fetch
+    
+    Returns:
+        List of post dictionaries
+    """
+    if not client:
+        return []
+    
+    try:
+        # Get user timeline
+        tweets = client.get_users_tweets(
+            id=account_id,
+            max_results=min(max_posts, 100),
+            tweet_fields=['author_id', 'public_metrics', 'created_at', 'text', 'conversation_id'],
+            user_fields=['username', 'name']
+        )
+        
+        if not tweets.data:
+            return []
+        
+        posts = []
+        for tweet in tweets.data:
+            metrics = tweet.public_metrics
+            posts.append({
+                'id': tweet.id,
+                'text': tweet.text,
+                'author_id': tweet.author_id,
+                'created_at': str(tweet.created_at) if hasattr(tweet, 'created_at') else None,
+                'likes': metrics.get('like_count', 0),
+                'replies': metrics.get('reply_count', 0),
+                'retweets': metrics.get('retweet_count', 0),
+                'quotes': metrics.get('quote_count', 0)
+            })
+        
+        return posts
+        
+    except Exception as e:
+        print(f"Error getting account feed: {e}")
+        return []
+
+
+def get_account_details(account_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get detailed account information
+    
+    Args:
+        account_id: Account/user ID
+    
+    Returns:
+        Account details dictionary
+    """
+    if not client:
+        return None
+    
+    try:
+        user = client.get_user(
+            id=account_id,
+            user_fields=['username', 'name', 'description', 'public_metrics', 'verified', 'profile_image_url', 'created_at']
+        )
+        
+        if not user.data:
+            return None
+        
+        metrics = user.data.public_metrics
+        return {
+            'id': user.data.id,
+            'username': user.data.username,
+            'name': user.data.name,
+            'description': user.data.description or '',
+            'followers': metrics.get('followers_count', 0),
+            'following': metrics.get('following_count', 0),
+            'tweets': metrics.get('tweet_count', 0),
+            'verified': user.data.verified or False,
+            'profile_image_url': getattr(user.data, 'profile_image_url', None),
+            'created_at': str(user.data.created_at) if hasattr(user.data, 'created_at') else None
+        }
+        
+    except Exception as e:
+        print(f"Error getting account details: {e}")
+        return None
+

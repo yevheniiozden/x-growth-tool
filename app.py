@@ -495,39 +495,162 @@ async def save_relevance_endpoint(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/onboarding/suggestions")
-async def get_suggestions_endpoint(request: Request):
-    """Step 4: Get onboarding suggestions"""
+# Interactive Onboarding API
+@app.get("/api/onboarding/interactive/status")
+async def get_interactive_status_endpoint(request: Request):
+    """Get current interactive onboarding status"""
     user = await get_current_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     try:
-        from onboarding_flow import get_onboarding_suggestions
-        result = get_onboarding_suggestions(user.get("user_id"))
-        return result
+        from onboarding_flow import get_interactive_onboarding_status
+        return get_interactive_onboarding_status(user.get("user_id"))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/onboarding/choices")
-async def save_choices_endpoint(request: Request):
-    """Step 4: Save onboarding choices and complete"""
+@app.get("/api/onboarding/interactive/post")
+async def get_interactive_post_endpoint(request: Request, phase: int):
+    """Get next post for interactive onboarding phase"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        from onboarding_flow import get_next_onboarding_post
+        return get_next_onboarding_post(user.get("user_id"), phase)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/onboarding/interactive/profile")
+async def get_interactive_profile_endpoint(request: Request):
+    """Get next profile for phase 4"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        from onboarding_flow import get_next_onboarding_profile
+        return get_next_onboarding_profile(user.get("user_id"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/interactive/response")
+async def save_interactive_response_endpoint(request: Request):
+    """Save user response and update persona"""
     user = await get_current_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     try:
         data = await request.json()
-        from onboarding_flow import save_onboarding_choices
-        result = save_onboarding_choices(
+        from onboarding_flow import save_onboarding_response
+        result = save_onboarding_response(
             user.get("user_id"),
-            data.get("followed_accounts", []),
-            data.get("liked_posts", []),
-            data.get("replied_posts", []),
-            data.get("engaged_posts", [])
+            data.get("phase"),
+            data.get("post_id"),
+            data.get("account_id"),
+            data.get("response_type"),
+            data.get("response_value")
         )
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/interactive/complete")
+async def complete_interactive_endpoint(request: Request):
+    """Mark interactive onboarding as complete"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        from onboarding_flow import complete_interactive_onboarding
+        return complete_interactive_onboarding(user.get("user_id"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Interactive Onboarding API
+@app.get("/api/onboarding/interactive/status")
+async def get_interactive_status_endpoint(request: Request):
+    """Get current interactive onboarding status"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        from onboarding_flow import get_interactive_onboarding_status
+        return get_interactive_onboarding_status(user.get("user_id"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/onboarding/interactive/post")
+async def get_interactive_post_endpoint(request: Request, phase: int):
+    """Get next post for interactive onboarding phase"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        from onboarding_flow import get_next_onboarding_post
+        return get_next_onboarding_post(user.get("user_id"), phase)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/onboarding/interactive/profile")
+async def get_interactive_profile_endpoint(request: Request):
+    """Get next profile for phase 4"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        from onboarding_flow import get_next_onboarding_profile
+        return get_next_onboarding_profile(user.get("user_id"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/interactive/response")
+async def save_interactive_response_endpoint(request: Request):
+    """Save user response and update persona"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        data = await request.json()
+        from onboarding_flow import save_onboarding_response
+        result = save_onboarding_response(
+            user.get("user_id"),
+            data.get("phase"),
+            data.get("post_id"),
+            data.get("account_id"),
+            data.get("response_type"),
+            data.get("response_value")
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/interactive/complete")
+async def complete_interactive_endpoint(request: Request):
+    """Mark interactive onboarding as complete"""
+    user = await get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        from onboarding_flow import complete_interactive_onboarding
+        return complete_interactive_onboarding(user.get("user_id"))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

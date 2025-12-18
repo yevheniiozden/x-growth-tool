@@ -623,6 +623,85 @@
             <div id="dashboard-content">
                 <div class="spinner"></div>
             </div>
+            
+            <!-- Interactive Onboarding Section -->
+            <div id="interactive-onboarding" class="hidden">
+                <div class="onboarding-header">
+                    <h2>🎯 Training Your AI Brain</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                        Help us understand your preferences by reviewing content and accounts
+                    </p>
+                    <div class="progress-container">
+                        <div class="progress-bar-container" style="margin-bottom: 0.5rem;">
+                            <div id="onboarding-progress-bar" class="progress-bar-fill" style="width: 0%"></div>
+                        </div>
+                        <div id="onboarding-progress-text" style="color: var(--text-secondary); font-size: 14px;">
+                            Phase 1 of 4 • Post 0 of 20
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Phase 1: Content Like -->
+                <div id="phase1-content" class="onboarding-phase hidden">
+                    <div class="onboarding-post-card">
+                        <div id="phase1-post-content"></div>
+                        <div class="onboarding-actions">
+                            <button class="btn btn-success" onclick="handleOnboardingResponse('yes')" style="flex: 1;">
+                                Yes, I like this
+                            </button>
+                            <button class="btn btn-danger" onclick="handleOnboardingResponse('no')" style="flex: 1;">
+                                No, not for me
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Phase 2: Engagement -->
+                <div id="phase2-content" class="onboarding-phase hidden">
+                    <div class="onboarding-post-card">
+                        <div id="phase2-post-content"></div>
+                        <div class="onboarding-actions">
+                            <button class="btn btn-success" onclick="handleOnboardingResponse('yes')" style="flex: 1;">
+                                Yes, I would engage
+                            </button>
+                            <button class="btn btn-danger" onclick="handleOnboardingResponse('no')" style="flex: 1;">
+                                No, I wouldn't
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Phase 3: Like/Skip -->
+                <div id="phase3-content" class="onboarding-phase hidden">
+                    <div class="onboarding-post-card">
+                        <div id="phase3-post-content"></div>
+                        <div class="onboarding-actions">
+                            <button class="btn btn-primary" onclick="handleOnboardingResponse('like')" style="flex: 1;">
+                                Like
+                            </button>
+                            <button class="btn btn-secondary" onclick="handleOnboardingResponse('skip')" style="flex: 1;">
+                                Skip
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Phase 4: Profile Subscription -->
+                <div id="phase4-content" class="onboarding-phase hidden">
+                    <div class="onboarding-profile-card">
+                        <div id="phase4-profile-content"></div>
+                        <div id="phase4-profile-feed" class="profile-feed"></div>
+                        <div class="onboarding-actions">
+                            <button class="btn btn-success" onclick="handleOnboardingResponse('subscribe')" style="flex: 1;">
+                                Subscribe
+                            </button>
+                            <button class="btn btn-secondary" onclick="handleOnboardingResponse('skip')" style="flex: 1;">
+                                Skip this profile
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Content Intelligence Section -->
@@ -723,9 +802,29 @@
                     updateStatus('X Not Connected', 'warning');
                 }
                 
-                // Show onboarding if not complete
+                // Check for interactive onboarding
+                const interactiveStatusResponse = await fetch('/api/onboarding/interactive/status', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (interactiveStatusResponse.ok) {
+                    const interactiveStatus = await interactiveStatusResponse.json();
+                    
+                    if (interactiveStatus.active) {
+                        // Show interactive onboarding in dashboard
+                        showInteractiveOnboarding(interactiveStatus);
+                        return;
+                    }
+                }
+                
+                // Show modal onboarding if not complete
                 if (onboardingData.step !== 'complete' && !currentUser.onboarding_complete) {
-                    showOnboardingStep(onboardingData.step);
+                    if (onboardingData.step < 4) {
+                        showOnboardingStep(onboardingData.step);
+                    } else {
+                        // Step 4 should show interactive onboarding, not modal
+                        loadDashboard();
+                    }
                 } else {
                     loadDashboard();
                 }
@@ -1594,6 +1693,255 @@
             }
         }
 
+        // Interactive Onboarding Functions
+        let currentOnboardingPhase = 1;
+        let currentOnboardingPost = null;
+        let currentOnboardingProfile = null;
+        
+        async function showInteractiveOnboarding(status) {
+            // Hide dashboard content and show onboarding
+            document.getElementById('dashboard-content').classList.add('hidden');
+            document.getElementById('interactive-onboarding').classList.remove('hidden');
+            
+            // Block other sections
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.style.pointerEvents = 'none';
+                btn.style.opacity = '0.5';
+            });
+            
+            currentOnboardingPhase = status.phase;
+            updateOnboardingProgress(status);
+            
+            // Load current phase content
+            await loadOnboardingPhase(status.phase);
+        }
+        
+        function updateOnboardingProgress(status) {
+            const progressBar = document.getElementById('onboarding-progress-bar');
+            const progressText = document.getElementById('onboarding-progress-text');
+            
+            if (progressBar && progressText) {
+                progressBar.style.width = (status.progress * 100) + '%';
+                
+                const phaseNames = {
+                    1: 'Content Preference',
+                    2: 'Engagement Preference',
+                    3: 'Like/Skip Preference',
+                    4: 'Profile Subscription'
+                };
+                
+                progressText.textContent = `Phase ${status.phase} of 4: ${phaseNames[status.phase]} • ${status.current_index + 1} of ${status.total}`;
+            }
+        }
+        
+        async function loadOnboardingPhase(phase) {
+            // Hide all phases
+            document.querySelectorAll('.onboarding-phase').forEach(p => p.classList.add('hidden'));
+            
+            if (phase === 4) {
+                // Load profile
+                await loadOnboardingProfile();
+            } else {
+                // Load post
+                await loadOnboardingPost(phase);
+            }
+        }
+        
+        async function loadOnboardingPost(phase) {
+            try {
+                const response = await fetch(`/api/onboarding/interactive/post?phase=${phase}`, {
+                    headers: getAuthHeaders()
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentOnboardingPost = data.post;
+                    
+                    // Show appropriate phase
+                    const phaseElement = document.getElementById(`phase${phase}-content`);
+                    const postContentElement = document.getElementById(`phase${phase}-post-content`);
+                    
+                    if (phaseElement && postContentElement) {
+                        phaseElement.classList.remove('hidden');
+                        
+                        // Display post
+                        postContentElement.innerHTML = `
+                            <div class="post-content">
+                                <div class="post-text">${data.post.text}</div>
+                                <div class="post-meta">
+                                    <span>@${data.post.author_username || 'unknown'}</span>
+                                    <span>❤️ ${data.post.likes || 0}</span>
+                                    <span>💬 ${data.post.replies || 0}</span>
+                                    ${data.post.retweets ? `<span>🔄 ${data.post.retweets}</span>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    alert('Error loading post: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function loadOnboardingProfile() {
+            try {
+                const response = await fetch('/api/onboarding/interactive/profile', {
+                    headers: getAuthHeaders()
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentOnboardingProfile = data.account;
+                    
+                    const phaseElement = document.getElementById('phase4-content');
+                    const profileContentElement = document.getElementById('phase4-profile-content');
+                    const feedElement = document.getElementById('phase4-profile-feed');
+                    
+                    if (phaseElement && profileContentElement && feedElement) {
+                        phaseElement.classList.remove('hidden');
+                        
+                        // Display profile
+                        profileContentElement.innerHTML = `
+                            <div class="profile-header">
+                                <div style="width: 64px; height: 64px; border-radius: 50%; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                                    ${data.account.profile_image_url ? `<img src="${data.account.profile_image_url}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">` : '@'}
+                                </div>
+                                <div class="profile-info" style="flex: 1;">
+                                    <h3>
+                                        ${data.account.name || data.account.username}
+                                        ${data.account.verified ? '<span style="color: var(--primary);">✓</span>' : ''}
+                                    </h3>
+                                    <p>@${data.account.username}</p>
+                                    <p style="margin-top: 0.5rem;">${data.account.description || 'No description'}</p>
+                                    <div class="profile-stats">
+                                        <span>👥 ${(data.account.followers || 0).toLocaleString()} followers</span>
+                                        <span>📊 ${(data.account.tweets || 0).toLocaleString()} tweets</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        // Display feed
+                        if (data.feed && data.feed.length > 0) {
+                            feedElement.innerHTML = data.feed.map(post => `
+                                <div class="feed-post">
+                                    <div class="feed-post-text">${post.text}</div>
+                                    <div class="feed-post-meta">
+                                        ❤️ ${post.likes || 0} • 💬 ${post.replies || 0} • 🔄 ${post.retweets || 0}
+                                    </div>
+                                </div>
+                            `).join('');
+                        } else {
+                            feedElement.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No posts available</p>';
+                        }
+                    }
+                } else {
+                    alert('Error loading profile: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function handleOnboardingResponse(responseValue) {
+            if (!currentOnboardingPost && !currentOnboardingProfile) {
+                return;
+            }
+            
+            const responseType = currentOnboardingPhase === 3 ? 
+                (responseValue === 'like' ? 'like' : 'skip') :
+                (responseValue === 'yes' || responseValue === 'subscribe' ? 'yes' : 'no');
+            
+            try {
+                const response = await fetch('/api/onboarding/interactive/response', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        phase: currentOnboardingPhase,
+                        post_id: currentOnboardingPost?.id,
+                        account_id: currentOnboardingProfile?.id,
+                        response_type: responseType,
+                        response_value: responseValue
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Check if phase is complete
+                    if (data.phase_complete) {
+                        if (currentOnboardingPhase < 4) {
+                            // Move to next phase
+                            currentOnboardingPhase = data.next_phase;
+                            await loadOnboardingPhase(currentOnboardingPhase);
+                            
+                            // Update status
+                            const statusResponse = await fetch('/api/onboarding/interactive/status', {
+                                headers: getAuthHeaders()
+                            });
+                            if (statusResponse.ok) {
+                                const status = await statusResponse.json();
+                                updateOnboardingProgress(status);
+                            }
+                        } else {
+                            // All phases complete
+                            await completeInteractiveOnboarding();
+                        }
+                    } else {
+                        // Load next post/profile in same phase
+                        await loadOnboardingPhase(currentOnboardingPhase);
+                        
+                        // Update progress
+                        const statusResponse = await fetch('/api/onboarding/interactive/status', {
+                            headers: getAuthHeaders()
+                        });
+                        if (statusResponse.ok) {
+                            const status = await statusResponse.json();
+                            updateOnboardingProgress(status);
+                        }
+                    }
+                } else {
+                    alert('Error saving response: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function completeInteractiveOnboarding() {
+            try {
+                const response = await fetch('/api/onboarding/interactive/complete', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Hide onboarding, show dashboard
+                    document.getElementById('interactive-onboarding').classList.add('hidden');
+                    document.getElementById('dashboard-content').classList.remove('hidden');
+                    
+                    // Unblock other sections
+                    document.querySelectorAll('.nav-btn').forEach(btn => {
+                        btn.style.pointerEvents = 'auto';
+                        btn.style.opacity = '1';
+                    });
+                    
+                    // Load dashboard
+                    loadDashboard();
+                } else {
+                    alert('Error completing onboarding: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
         // Initialize on page load
         window.onload = () => {
             checkAuthStatus();

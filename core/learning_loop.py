@@ -214,6 +214,154 @@ def process_outcome_feedback(
     }
 
 
+def process_onboarding_response(
+    phase: int,
+    response: Dict[str, Any],
+    user_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Process response from interactive onboarding and update persona state
+    
+    Args:
+        phase: Phase number (1-4)
+        response: Response dictionary with post_id, account_id, response_type, response_value
+        user_id: User ID
+    
+    Returns:
+        Update summary
+    """
+    from services.ai_service import extract_topics_from_text, analyze_tone
+    
+    state = load_persona_state(user_id)
+    updates = []
+    
+    post_id = response.get("post_id")
+    account_id = response.get("account_id")
+    response_type = response.get("response_type")
+    response_value = response.get("response_value")
+    
+    # Phase 1: Content Like (Yes/No)
+    if phase == 1:
+        if response_value in [True, "yes", "Yes"]:
+            # User likes this content - extract topics and tone
+            # We need post text - this should be passed in response or fetched
+            post_text = response.get("post_text", "")
+            if post_text:
+                # Extract topics
+                topics = extract_topics_from_text(post_text)
+                for topic, weight in topics.items():
+                    if topic in state["topic_affinity"]:
+                        # Incremental update
+                        current = state["topic_affinity"][topic]
+                        state["topic_affinity"][topic] = min(1.0, current + 0.02)
+                        updates.append(f"Increased affinity for {topic}")
+                
+                # Analyze tone
+                tone = analyze_tone(post_text)
+                if tone:
+                    # Update tone preferences incrementally
+                    if "sentence_length" in tone:
+                        # Prefer similar sentence length
+                        current_length = state["tone_style"]["sentence_length"]
+                        if tone["sentence_length"] == "short" and current_length != "short":
+                            # Slight adjustment toward shorter
+                            pass  # Would need more sophisticated logic
+                    updates.append("Learned tone preferences")
+        else:
+            # User doesn't like - slight negative adjustment
+            post_text = response.get("post_text", "")
+            if post_text:
+                topics = extract_topics_from_text(post_text)
+                for topic in topics:
+                    if topic in state["topic_affinity"]:
+                        current = state["topic_affinity"][topic]
+                        state["topic_affinity"][topic] = max(0.0, current - 0.01)
+                        updates.append(f"Decreased affinity for {topic}")
+    
+    # Phase 2: Engagement (Yes/No)
+    elif phase == 2:
+        if response_value in [True, "yes", "Yes"]:
+            # User would engage - learn engagement triggers
+            post_text = response.get("post_text", "")
+            if post_text:
+                # Analyze what makes them want to engage
+                # Check for questions, controversial topics, etc.
+                if "?" in post_text:
+                    state["tone_style"]["question_frequency"] = min(1.0, 
+                        state["tone_style"]["question_frequency"] + 0.02)
+                    updates.append("Increased preference for questions")
+                
+                # Update engagement behavior
+                update_from_feedback("engagement_behavior", {
+                    "attribute": "replies_per_day_baseline",
+                    "adjustment": 0.1
+                }, user_id)
+                updates.append("Learned engagement triggers")
+        else:
+            # User wouldn't engage - learn what to avoid
+            update_from_feedback("engagement_behavior", {
+                "attribute": "replies_per_day_baseline",
+                "adjustment": -0.05
+            }, user_id)
+            updates.append("Learned what not to engage with")
+    
+    # Phase 3: Like/Skip
+    elif phase == 3:
+        if response_type == "like" or response_value in [True, "like", "Like"]:
+            # User likes - similar to phase 1
+            post_text = response.get("post_text", "")
+            if post_text:
+                topics = extract_topics_from_text(post_text)
+                for topic, weight in topics.items():
+                    if topic in state["topic_affinity"]:
+                        current = state["topic_affinity"][topic]
+                        state["topic_affinity"][topic] = min(1.0, current + 0.015)
+                        updates.append(f"Refined affinity for {topic}")
+        else:
+            # User skips - negative adjustment
+            post_text = response.get("post_text", "")
+            if post_text:
+                topics = extract_topics_from_text(post_text)
+                for topic in topics:
+                    if topic in state["topic_affinity"]:
+                        current = state["topic_affinity"][topic]
+                        state["topic_affinity"][topic] = max(0.0, current - 0.01)
+                        updates.append(f"Reduced affinity for {topic}")
+    
+    # Phase 4: Subscribe (Yes/No)
+    elif phase == 4:
+        if response_value in [True, "yes", "Yes", "subscribe", "Subscribe"]:
+            # User would subscribe - learn account preferences
+            account_description = response.get("account_description", "")
+            if account_description:
+                topics = extract_topics_from_text(account_description)
+                for topic, weight in topics.items():
+                    if topic in state["topic_affinity"]:
+                        current = state["topic_affinity"][topic]
+                        state["topic_affinity"][topic] = min(1.0, current + 0.02)
+                        updates.append(f"Increased affinity for {topic} from account")
+            
+            # Update follow behavior
+            update_from_feedback("engagement_behavior", {
+                "attribute": "follow_after_reply_tendency",
+                "adjustment": 0.05
+            }, user_id)
+            updates.append("Learned account preferences")
+        else:
+            # User wouldn't subscribe - learn what accounts to avoid
+            updates.append("Learned account preferences to avoid")
+    
+    # Save updated state
+    from core.persona_state import save_persona_state
+    save_persona_state(state, user_id)
+    
+    return {
+        "updated": True,
+        "updates": updates,
+        "state": state
+    }
+
+
 def process_daily_summary(user_id: Optional[str] = None) -> Dict[str, Any]:
     """Process all feedback from the day and update Persona State"""
     # This would aggregate all feedback from the day

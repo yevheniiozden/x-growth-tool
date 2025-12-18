@@ -5,6 +5,7 @@ from core.auth import update_user, get_user_data_dir, load_users, save_users
 from services.x_api import get_user_timeline, get_user_likes, get_user_replies, get_current_user
 from services.ai_service import client
 from features.account_discovery import discover_accounts_for_user, get_posts_for_onboarding
+from datetime import datetime
 import json
 
 
@@ -144,10 +145,24 @@ def save_keyword_relevance(user_id: str, keyword_relevance: Dict[str, float]) ->
                 "error": f"Relevance score for '{keyword}' must be between 10% and 100%"
             }
     
-    # Save relevance preferences and move to next step
+    # Save relevance preferences and initialize interactive onboarding
     users[user_id]["keyword_relevance"] = keyword_relevance
     users[user_id]["onboarding_step"] = 4
+    users[user_id]["interactive_onboarding"] = {
+        "phase": 1,
+        "phase1_index": 0,
+        "phase2_index": 0,
+        "phase3_index": 0,
+        "phase4_index": 0,
+        "phase1_responses": [],
+        "phase2_responses": [],
+        "phase3_responses": [],
+        "phase4_responses": []
+    }
     save_users(users)
+    
+    # Discover accounts and cache posts for onboarding
+    _prepare_onboarding_data(user_id)
     
     return {
         "success": True,
@@ -156,61 +171,191 @@ def save_keyword_relevance(user_id: str, keyword_relevance: Dict[str, float]) ->
     }
 
 
-def get_onboarding_suggestions(user_id: str) -> Dict[str, Any]:
+def get_interactive_onboarding_status(user_id: str) -> Dict[str, Any]:
     """
-    Step 4: Get suggestions for following onboarding
+    Get current interactive onboarding status
     
     Args:
         user_id: User ID
     
     Returns:
-        Dict with suggested accounts, posts, likes, replies
+        Dict with phase, progress, and status
+    """
+    users = load_users()
+    if user_id not in users:
+        return {"active": False, "error": "User not found"}
+    
+    user = users[user_id]
+    interactive = user.get("interactive_onboarding", {})
+    
+    if not interactive:
+        return {"active": False}
+    
+    phase = interactive.get("phase", 1)
+    
+    # Calculate progress
+    phase_counts = {1: 20, 2: 10, 3: 20, 4: 10}  # Default counts
+    current_index = interactive.get(f"phase{phase}_index", 0)
+    total = phase_counts.get(phase, 10)
+    
+    # Calculate overall progress
+    total_phases = 4
+    completed_phases = phase - 1
+    phase_progress = current_index / total if total > 0 else 0
+    overall_progress = (completed_phases + phase_progress) / total_phases
+    
+    return {
+        "active": True,
+        "phase": phase,
+        "current_index": current_index,
+        "total": total,
+        "progress": overall_progress,
+        "phase_progress": phase_progress
+    }
+
+
+def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
+    """
+    Get next post for interactive onboarding phase
+    
+    Args:
+        user_id: User ID
+        phase: Phase number (1, 2, or 3)
+    
+    Returns:
+        Post data or error
     """
     users = load_users()
     if user_id not in users:
         return {"success": False, "error": "User not found"}
     
     user = users[user_id]
+    interactive = user.get("interactive_onboarding", {})
     keywords = user.get("keywords", [])
     keyword_relevance = user.get("keyword_relevance", {})
     
-    if not keywords or not keyword_relevance:
-        return {
-            "success": False,
-            "error": "Keywords and relevance preferences required"
-        }
+    # Get cached posts or fetch new ones
+    cache_key = f"onboarding_posts_phase{phase}"
+    user_dir = get_user_data_dir(user_id)
+    cache_file = user_dir / f"{cache_key}.json"
     
-    # Get suggestions
-    accounts = discover_accounts_for_user(keywords, keyword_relevance, user_id)
-    posts_to_like = get_posts_for_onboarding(keywords, keyword_relevance, 'like', 20)
-    posts_to_reply = get_posts_for_onboarding(keywords, keyword_relevance, 'reply', 15)
-    posts_to_engage = get_posts_for_onboarding(keywords, keyword_relevance, 'engage', 15)
+    posts = []
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                posts = json.load(f)
+        except:
+            pass
+    
+    # If no cached posts, fetch them
+    if not posts:
+        if phase == 1:
+            posts = get_posts_for_onboarding(keywords, keyword_relevance, 'like', 20)
+        elif phase == 2:
+            posts = get_posts_for_onboarding(keywords, keyword_relevance, 'reply', 10)
+        elif phase == 3:
+            posts = get_posts_for_onboarding(keywords, keyword_relevance, 'engage', 20)
+        
+        # Cache posts
+        if posts:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(posts, f, indent=2, ensure_ascii=False)
+    
+    current_index = interactive.get(f"phase{phase}_index", 0)
+    
+    if current_index >= len(posts):
+        return {"success": False, "error": "No more posts in this phase"}
     
     return {
         "success": True,
-        "accounts": accounts[:20],  # Top 20 accounts
-        "posts_to_like": posts_to_like,
-        "posts_to_reply": posts_to_reply,
-        "posts_to_engage": posts_to_engage
+        "post": posts[current_index],
+        "index": current_index,
+        "total": len(posts)
     }
 
 
-def save_onboarding_choices(
-    user_id: str,
-    followed_accounts: List[str],
-    liked_posts: List[str],
-    replied_posts: List[str],
-    engaged_posts: List[str]
-) -> Dict[str, Any]:
+def get_next_onboarding_profile(user_id: str) -> Dict[str, Any]:
     """
-    Step 4: Save user's onboarding choices and complete onboarding
+    Get next profile for phase 4
     
     Args:
         user_id: User ID
-        followed_accounts: List of account IDs user chose to follow
-        liked_posts: List of post IDs user liked
-        replied_posts: List of post IDs user replied to
-        engaged_posts: List of post IDs user engaged with
+    
+    Returns:
+        Profile data with feed or error
+    """
+    from features.account_discovery import get_account_feed, get_account_details
+    
+    users = load_users()
+    if user_id not in users:
+        return {"success": False, "error": "User not found"}
+    
+    user = users[user_id]
+    interactive = user.get("interactive_onboarding", {})
+    keywords = user.get("keywords", [])
+    keyword_relevance = user.get("keyword_relevance", {})
+    
+    # Get cached accounts or fetch new ones
+    user_dir = get_user_data_dir(user_id)
+    cache_file = user_dir / "onboarding_accounts.json"
+    
+    accounts = []
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                accounts = json.load(f)
+        except:
+            pass
+    
+    # If no cached accounts, fetch them
+    if not accounts:
+        accounts = discover_accounts_for_user(keywords, keyword_relevance, user_id)
+        # Cache accounts
+        if accounts:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(accounts, f, indent=2, ensure_ascii=False)
+    
+    current_index = interactive.get("phase4_index", 0)
+    
+    if current_index >= len(accounts):
+        return {"success": False, "error": "No more profiles in this phase"}
+    
+    account = accounts[current_index]
+    
+    # Get full account details and feed
+    account_details = get_account_details(account.get("id"))
+    if account_details:
+        account.update(account_details)
+    
+    feed = get_account_feed(account.get("id"), max_posts=20)
+    
+    return {
+        "success": True,
+        "account": account,
+        "feed": feed,
+        "index": current_index,
+        "total": len(accounts)
+    }
+
+
+def save_onboarding_response(
+    user_id: str,
+    phase: int,
+    post_id: Optional[str],
+    account_id: Optional[str],
+    response_type: str,
+    response_value: Any
+) -> Dict[str, Any]:
+    """
+    Save user response and update persona state
+    
+    Args:
+        user_id: User ID
+        phase: Phase number (1-4)
+        post_id: Post ID (for phases 1-3)
+        account_id: Account ID (for phase 4)
+        response_type: Type of response ('like', 'skip', 'yes', 'no', 'subscribe')
+        response_value: Response value (True/False or string)
     
     Returns:
         Result dict
@@ -219,68 +364,132 @@ def save_onboarding_choices(
     if user_id not in users:
         return {"success": False, "error": "User not found"}
     
-    # Save choices
-    users[user_id]["onboarding_choices"] = {
-        "followed_accounts": followed_accounts,
-        "liked_posts": liked_posts,
-        "replied_posts": replied_posts,
-        "engaged_posts": engaged_posts
+    user = users[user_id]
+    interactive = user.get("interactive_onboarding", {})
+    
+    # Save response
+    response = {
+        "post_id": post_id,
+        "account_id": account_id,
+        "response_type": response_type,
+        "response_value": response_value,
+        "timestamp": datetime.now().isoformat()
     }
     
-    # Update persona state based on choices
-    _update_persona_from_choices(user_id, followed_accounts, liked_posts, replied_posts, engaged_posts)
+    responses_key = f"phase{phase}_responses"
+    if responses_key not in interactive:
+        interactive[responses_key] = []
+    interactive[responses_key].append(response)
     
-    # Complete onboarding
+    # Update index
+    index_key = f"phase{phase}_index"
+    interactive[index_key] = interactive.get(index_key, 0) + 1
+    
+    users[user_id]["interactive_onboarding"] = interactive
+    save_users(users)
+    
+    # Get post/account data for persona update
+    if post_id:
+        # Fetch post data if needed
+        user_dir = get_user_data_dir(user_id)
+        for phase_num in [1, 2, 3]:
+            cache_file = user_dir / f"onboarding_posts_phase{phase_num}.json"
+            if cache_file.exists():
+                try:
+                    with open(cache_file, 'r', encoding='utf-8') as f:
+                        posts = json.load(f)
+                        for post in posts:
+                            if post.get("id") == post_id:
+                                response["post_text"] = post.get("text", "")
+                                break
+                except:
+                    pass
+    
+    if account_id:
+        # Fetch account data if needed
+        user_dir = get_user_data_dir(user_id)
+        cache_file = user_dir / "onboarding_accounts.json"
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r', encoding='utf-8') as f:
+                    accounts = json.load(f)
+                    for account in accounts:
+                        if account.get("id") == account_id:
+                            response["account_description"] = account.get("description", "")
+                            break
+            except:
+                pass
+    
+    # Update persona state
+    from core.learning_loop import process_onboarding_response
+    process_onboarding_response(phase, response, user_id)
+    
+    # Check if phase is complete
+    phase_counts = {1: 20, 2: 10, 3: 20, 4: 10}
+    if interactive[index_key] >= phase_counts.get(phase, 10):
+        # Move to next phase
+        if phase < 4:
+            interactive["phase"] = phase + 1
+            users[user_id]["interactive_onboarding"] = interactive
+            save_users(users)
+        else:
+            # All phases complete
+            complete_interactive_onboarding(user_id)
+    
+    return {
+        "success": True,
+        "next_phase": interactive.get("phase", phase),
+        "phase_complete": interactive[index_key] >= phase_counts.get(phase, 10)
+    }
+
+
+def complete_interactive_onboarding(user_id: str) -> Dict[str, Any]:
+    """
+    Mark interactive onboarding as complete
+    
+    Args:
+        user_id: User ID
+    
+    Returns:
+        Result dict
+    """
+    users = load_users()
+    if user_id not in users:
+        return {"success": False, "error": "User not found"}
+    
     users[user_id]["onboarding_complete"] = True
     users[user_id]["onboarding_step"] = 5
     save_users(users)
     
     return {
         "success": True,
-        "message": "Onboarding complete!",
-        "step": "complete"
+        "message": "Interactive onboarding complete!"
     }
 
 
-def _update_persona_from_choices(
-    user_id: str,
-    followed_accounts: List[str],
-    liked_posts: List[str],
-    replied_posts: List[str],
-    engaged_posts: List[str]
-) -> None:
-    """Update persona state based on onboarding choices"""
-    from core.persona_state import load_persona_state, save_persona_state
-    from core.learning_loop import process_behavioral_feedback
-    
-    state = load_persona_state(user_id)
+def _prepare_onboarding_data(user_id: str) -> None:
+    """Prepare and cache onboarding data (accounts and posts)"""
     users = load_users()
     user = users.get(user_id)
     keywords = user.get("keywords", [])
     keyword_relevance = user.get("keyword_relevance", {})
     
-    # Update topic affinity based on keywords and relevance
-    for keyword, relevance in keyword_relevance.items():
-        # Map keyword to topic categories
-        topic = _keyword_to_topic(keyword)
-        if topic:
-            state["topic_affinity"][topic] = relevance
+    user_dir = get_user_data_dir(user_id)
     
-    # Process behavioral feedback
-    for _ in liked_posts:
-        process_behavioral_feedback("like", {"keywords": keywords}, user_id)
+    # Discover and cache accounts
+    accounts = discover_accounts_for_user(keywords, keyword_relevance, user_id)
+    if accounts:
+        cache_file = user_dir / "onboarding_accounts.json"
+        with open(cache_file, 'w', encoding='utf-8') as f:
+            json.dump(accounts, f, indent=2, ensure_ascii=False)
     
-    for _ in replied_posts:
-        process_behavioral_feedback("reply", {"keywords": keywords}, user_id)
-    
-    for _ in followed_accounts:
-        process_behavioral_feedback("follow", {"keywords": keywords}, user_id)
-    
-    # Update engagement behavior
-    state["engagement_behavior"]["replies_per_day_baseline"] = max(1, len(replied_posts) // 7)
-    state["engagement_behavior"]["likes_per_day_baseline"] = max(5, len(liked_posts) // 7)
-    
-    save_persona_state(state, user_id)
+    # Fetch and cache posts for each phase
+    for phase, post_type, count in [(1, 'like', 20), (2, 'reply', 10), (3, 'engage', 20)]:
+        posts = get_posts_for_onboarding(keywords, keyword_relevance, post_type, count)
+        if posts:
+            cache_file = user_dir / f"onboarding_posts_phase{phase}.json"
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(posts, f, indent=2, ensure_ascii=False)
 
 
 def _keyword_to_topic(keyword: str) -> Optional[str]:

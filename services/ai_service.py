@@ -47,6 +47,108 @@ RISK SENSITIVITY:
     return context
 
 
+def extract_topics_from_text(text: str) -> Dict[str, float]:
+    """
+    Extract topics from text using AI
+    
+    Args:
+        text: Text to analyze
+    
+    Returns:
+        Dict mapping topics to weights (0-1)
+    """
+    if not client or not text:
+        return {}
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a topic extraction assistant. Extract main topics from the given text and return them as a JSON object with topic names as keys and relevance scores (0-1) as values. Focus on topics like: AI, startups, SaaS, product, design, marketing, productivity, business, tech, etc."},
+                {"role": "user", "content": f"Extract topics from this text:\n\n{text[:500]}"}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3
+        )
+        
+        import json
+        result = json.loads(response.choices[0].message.content)
+        return result
+        
+    except Exception as e:
+        print(f"Error extracting topics: {e}")
+        # Fallback: simple keyword matching
+        topics = {}
+        text_lower = text.lower()
+        topic_keywords = {
+            'ai': ['ai', 'artificial intelligence', 'machine learning', 'ml'],
+            'startups': ['startup', 'entrepreneur', 'founder'],
+            'saas': ['saas', 'software', 'platform'],
+            'product': ['product', 'feature', 'development'],
+            'design': ['design', 'ui', 'ux', 'visual'],
+            'marketing': ['marketing', 'growth', 'advertising'],
+            'productivity': ['productivity', 'efficiency', 'workflow'],
+            'business': ['business', 'company', 'revenue'],
+            'tech': ['tech', 'technology', 'coding', 'developer']
+        }
+        
+        for topic, keywords in topic_keywords.items():
+            for keyword in keywords:
+                if keyword in text_lower:
+                    topics[topic] = 0.5
+                    break
+        
+        return topics
+
+
+def analyze_tone(text: str) -> Dict[str, Any]:
+    """
+    Analyze tone and style of text
+    
+    Args:
+        text: Text to analyze
+    
+    Returns:
+        Dict with tone characteristics
+    """
+    if not client or not text:
+        return {}
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a tone analysis assistant. Analyze the tone and style of the given text and return a JSON object with: sentence_length (short/medium/long), question_frequency (0-1), humor_present (true/false), emotional_intensity (low/moderate/high), formality (casual/formal)."},
+                {"role": "user", "content": f"Analyze the tone of this text:\n\n{text[:500]}"}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3
+        )
+        
+        import json
+        result = json.loads(response.choices[0].message.content)
+        return result
+        
+    except Exception as e:
+        print(f"Error analyzing tone: {e}")
+        # Fallback: simple heuristics
+        tone = {
+            "sentence_length": "medium",
+            "question_frequency": text.count('?') / max(len(text.split('.')) + len(text.split('!')), 1),
+            "humor_present": False,
+            "emotional_intensity": "moderate",
+            "formality": "casual"
+        }
+        
+        avg_sentence_length = len(text.split()) / max(text.count('.') + text.count('!'), 1)
+        if avg_sentence_length < 10:
+            tone["sentence_length"] = "short"
+        elif avg_sentence_length > 25:
+            tone["sentence_length"] = "long"
+        
+        return tone
+
+
 def analyze_content_patterns(posts: List[Dict[str, Any]], user_id: Optional[str] = None) -> str:
     """
     Analyze posts from X Lists to extract patterns
