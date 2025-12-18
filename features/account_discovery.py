@@ -30,15 +30,25 @@ def search_accounts_by_keywords(
     try:
         # Search for accounts using keywords
         for keyword in keywords:
-            # Search for tweets containing the keyword
-            tweets = client.search_recent_tweets(
-                query=f"{keyword} -is:retweet lang:en",
-                max_results=100,
-                tweet_fields=['author_id', 'public_metrics', 'created_at'],
-                user_fields=['username', 'name', 'description', 'public_metrics', 'verified']
-            )
+            try:
+                # Search for tweets containing the keyword
+                tweets = client.search_recent_tweets(
+                    query=f"{keyword} -is:retweet lang:en",
+                    max_results=100,
+                    tweet_fields=['author_id', 'public_metrics', 'created_at'],
+                    user_fields=['username', 'name', 'description', 'public_metrics', 'verified']
+                )
+            except Exception as api_error:
+                # Handle 401 Unauthorized and other API errors gracefully
+                error_msg = str(api_error)
+                if "401" in error_msg or "Unauthorized" in error_msg:
+                    print(f"X API authentication error for keyword '{keyword}': {error_msg}")
+                    print("Please check your X_API_KEY in environment variables")
+                else:
+                    print(f"Error searching for keyword '{keyword}': {error_msg}")
+                continue
             
-            if not tweets.data:
+            if not tweets or not tweets.data:
                 continue
             
             # Get unique authors
@@ -108,7 +118,13 @@ def search_accounts_by_keywords(
         return unique_accounts
         
     except Exception as e:
-        print(f"Error searching accounts: {e}")
+        error_msg = str(e)
+        if "401" in error_msg or "Unauthorized" in error_msg:
+            print(f"X API authentication error: {error_msg}")
+            print("Please check your X_API_KEY in environment variables")
+        else:
+            print(f"Error searching accounts: {error_msg}")
+        # Return empty list instead of crashing - allow onboarding to proceed
         return []
 
 
@@ -222,14 +238,23 @@ def get_posts_for_onboarding(
         query = " OR ".join(query_parts) + " -is:retweet lang:en"
         
         # Search for recent tweets
-        tweets = client.search_recent_tweets(
-            query=query,
-            max_results=100,
-            tweet_fields=['author_id', 'public_metrics', 'created_at', 'text', 'conversation_id'],
-            user_fields=['username', 'name']
-        )
+        try:
+            tweets = client.search_recent_tweets(
+                query=query,
+                max_results=100,
+                tweet_fields=['author_id', 'public_metrics', 'created_at', 'text', 'conversation_id'],
+                user_fields=['username', 'name']
+            )
+        except Exception as api_error:
+            error_msg = str(api_error)
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                print(f"X API authentication error getting posts: {error_msg}")
+                print("Please check your X_API_KEY in environment variables")
+            else:
+                print(f"Error getting posts for onboarding: {error_msg}")
+            return []
         
-        if not tweets.data:
+        if not tweets or not tweets.data:
             return []
         
         # Score and filter posts
@@ -279,7 +304,13 @@ def get_posts_for_onboarding(
         return posts[:max_results]
         
     except Exception as e:
-        print(f"Error getting posts for onboarding: {e}")
+        error_msg = str(e)
+        if "401" in error_msg or "Unauthorized" in error_msg:
+            print(f"X API authentication error: {error_msg}")
+            print("Please check your X_API_KEY in environment variables")
+        else:
+            print(f"Error getting posts for onboarding: {error_msg}")
+        # Return empty list instead of crashing - allow onboarding to proceed
         return []
 
 
@@ -299,14 +330,23 @@ def get_account_feed(account_id: str, max_posts: int = 20) -> List[Dict[str, Any
     
     try:
         # Get user timeline
-        tweets = client.get_users_tweets(
-            id=account_id,
-            max_results=min(max_posts, 100),
-            tweet_fields=['author_id', 'public_metrics', 'created_at', 'text', 'conversation_id'],
-            user_fields=['username', 'name']
-        )
+        try:
+            tweets = client.get_users_tweets(
+                id=account_id,
+                max_results=min(max_posts, 100),
+                tweet_fields=['author_id', 'public_metrics', 'created_at', 'text', 'conversation_id'],
+                user_fields=['username', 'name']
+            )
+        except Exception as api_error:
+            error_msg = str(api_error)
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                print(f"X API authentication error getting account feed: {error_msg}")
+                print("Please check your X_API_KEY in environment variables")
+            else:
+                print(f"Error getting account feed: {error_msg}")
+            return []
         
-        if not tweets.data:
+        if not tweets or not tweets.data:
             return []
         
         posts = []
@@ -326,7 +366,13 @@ def get_account_feed(account_id: str, max_posts: int = 20) -> List[Dict[str, Any
         return posts
         
     except Exception as e:
-        print(f"Error getting account feed: {e}")
+        error_msg = str(e)
+        if "401" in error_msg or "Unauthorized" in error_msg:
+            print(f"X API authentication error: {error_msg}")
+            print("Please check your X_API_KEY in environment variables")
+        else:
+            print(f"Error getting account feed: {error_msg}")
+        # Return empty list instead of crashing - allow onboarding to proceed
         return []
 
 
@@ -344,12 +390,21 @@ def get_account_details(account_id: str) -> Optional[Dict[str, Any]]:
         return None
     
     try:
-        user = client.get_user(
-            id=account_id,
-            user_fields=['username', 'name', 'description', 'public_metrics', 'verified', 'profile_image_url', 'created_at']
-        )
+        try:
+            user = client.get_user(
+                id=account_id,
+                user_fields=['username', 'name', 'description', 'public_metrics', 'verified', 'profile_image_url', 'created_at']
+            )
+        except Exception as api_error:
+            error_msg = str(api_error)
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                print(f"X API authentication error getting account details: {error_msg}")
+                print("Please check your X_API_KEY in environment variables")
+            else:
+                print(f"Error getting account details: {error_msg}")
+            return None
         
-        if not user.data:
+        if not user or not user.data:
             return None
         
         metrics = user.data.public_metrics

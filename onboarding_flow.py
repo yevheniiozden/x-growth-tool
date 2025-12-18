@@ -263,7 +263,23 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
     
     current_index = interactive.get(f"phase{phase}_index", 0)
     
-    if current_index >= len(posts):
+    if not posts or current_index >= len(posts):
+        # If no posts available (API error), return a placeholder post
+        if not posts:
+            return {
+                "success": True,
+                "post": {
+                    "id": f"placeholder_{phase}_{current_index}",
+                    "text": "No posts available at this time. Please check your X API configuration. You can still proceed with onboarding.",
+                    "author_username": "system",
+                    "likes": 0,
+                    "replies": 0,
+                    "relevance_score": 0.5
+                },
+                "index": current_index,
+                "total": 1,
+                "placeholder": True
+            }
         return {"success": False, "error": "No more posts in this phase"}
     
     return {
@@ -317,22 +333,48 @@ def get_next_onboarding_profile(user_id: str) -> Dict[str, Any]:
     
     current_index = interactive.get("phase4_index", 0)
     
-    if current_index >= len(accounts):
+    if not accounts or current_index >= len(accounts):
+        # If no accounts available (API error), return a placeholder account
+        if not accounts:
+            return {
+                "success": True,
+                "account": {
+                    "id": f"placeholder_account_{current_index}",
+                    "username": "example_account",
+                    "name": "Example Account",
+                    "description": "No accounts available at this time. Please check your X API configuration. You can still proceed with onboarding.",
+                    "followers": 0,
+                    "tweets": 0,
+                    "verified": False
+                },
+                "feed": [],
+                "index": current_index,
+                "total": 1,
+                "placeholder": True
+            }
         return {"success": False, "error": "No more profiles in this phase"}
     
     account = accounts[current_index]
     
-    # Get full account details and feed
-    account_details = get_account_details(account.get("id"))
-    if account_details:
-        account.update(account_details)
+    # Get full account details and feed (handle errors gracefully)
+    try:
+        account_details = get_account_details(account.get("id"))
+        if account_details:
+            account.update(account_details)
+    except Exception as e:
+        print(f"Error getting account details: {e}")
+        # Continue with basic account info
     
-    feed = get_account_feed(account.get("id"), max_posts=20)
+    try:
+        feed = get_account_feed(account.get("id"), max_posts=20)
+    except Exception as e:
+        print(f"Error getting account feed: {e}")
+        feed = []
     
     return {
         "success": True,
         "account": account,
-        "feed": feed,
+        "feed": feed or [],
         "index": current_index,
         "total": len(accounts)
     }
@@ -476,20 +518,43 @@ def _prepare_onboarding_data(user_id: str) -> None:
     
     user_dir = get_user_data_dir(user_id)
     
-    # Discover and cache accounts
-    accounts = discover_accounts_for_user(keywords, keyword_relevance, user_id)
-    if accounts:
+    # Discover and cache accounts (handle API errors gracefully)
+    try:
+        accounts = discover_accounts_for_user(keywords, keyword_relevance, user_id)
+        if accounts:
+            cache_file = user_dir / "onboarding_accounts.json"
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(accounts, f, indent=2, ensure_ascii=False)
+        else:
+            # If no accounts found (API error), create empty cache to allow onboarding to proceed
+            cache_file = user_dir / "onboarding_accounts.json"
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump([], f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error preparing account data: {e}")
+        # Create empty cache to allow onboarding to proceed
         cache_file = user_dir / "onboarding_accounts.json"
         with open(cache_file, 'w', encoding='utf-8') as f:
-            json.dump(accounts, f, indent=2, ensure_ascii=False)
+            json.dump([], f, indent=2, ensure_ascii=False)
     
-    # Fetch and cache posts for each phase
+    # Fetch and cache posts for each phase (handle API errors gracefully)
     for phase, post_type, count in [(1, 'like', 20), (2, 'reply', 10), (3, 'engage', 20)]:
-        posts = get_posts_for_onboarding(keywords, keyword_relevance, post_type, count)
-        if posts:
+        try:
+            posts = get_posts_for_onboarding(keywords, keyword_relevance, post_type, count)
+            cache_file = user_dir / f"onboarding_posts_phase{phase}.json"
+            if posts:
+                with open(cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(posts, f, indent=2, ensure_ascii=False)
+            else:
+                # If no posts found (API error), create empty cache to allow onboarding to proceed
+                with open(cache_file, 'w', encoding='utf-8') as f:
+                    json.dump([], f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error preparing posts for phase {phase}: {e}")
+            # Create empty cache to allow onboarding to proceed
             cache_file = user_dir / f"onboarding_posts_phase{phase}.json"
             with open(cache_file, 'w', encoding='utf-8') as f:
-                json.dump(posts, f, indent=2, ensure_ascii=False)
+                json.dump([], f, indent=2, ensure_ascii=False)
 
 
 def _keyword_to_topic(keyword: str) -> Optional[str]:

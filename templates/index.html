@@ -821,8 +821,23 @@
                 if (onboardingData.step !== 'complete' && !currentUser.onboarding_complete) {
                     if (onboardingData.step < 4) {
                         showOnboardingStep(onboardingData.step);
+                    } else if (onboardingData.step === 4) {
+                        // Step 4 should show interactive onboarding in dashboard, not modal
+                        // Check interactive onboarding status
+                        const interactiveStatusResponse = await fetch('/api/onboarding/interactive/status', {
+                            headers: getAuthHeaders()
+                        });
+                        
+                        if (interactiveStatusResponse.ok) {
+                            const interactiveStatus = await interactiveStatusResponse.json();
+                            if (interactiveStatus.active) {
+                                showInteractiveOnboarding(interactiveStatus);
+                                return;
+                            }
+                        }
+                        // If interactive onboarding not active, load dashboard (it will show onboarding)
+                        loadDashboard();
                     } else {
-                        // Step 4 should show interactive onboarding, not modal
                         loadDashboard();
                     }
                 } else {
@@ -918,32 +933,11 @@
                     <div id="step3-error" style="margin-top: 1rem;"></div>
                 `;
             } else if (step === 4 || step === '4') {
-                // Step 4: Following Onboarding
-                content.innerHTML = `
-                    <h2>🎯 Step 4: Discover & Engage</h2>
-                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">
-                        Based on your interests, we've found accounts and content you might like. 
-                        Select what interests you to help us learn your preferences.
-                    </p>
-                    <div id="step4-loading" style="text-align: center; padding: 2rem;">
-                        <div class="spinner"></div>
-                        <p style="color: var(--text-secondary); margin-top: 1rem;">Loading suggestions...</p>
-                    </div>
-                    <div id="step4-content" class="hidden">
-                        <div id="suggestions-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
-                            <button class="suggestion-tab active" onclick="showSuggestionTab('accounts')">👥 Accounts</button>
-                            <button class="suggestion-tab" onclick="showSuggestionTab('likes')">❤️ Posts to Like</button>
-                            <button class="suggestion-tab" onclick="showSuggestionTab('replies')">💬 Posts to Reply</button>
-                            <button class="suggestion-tab" onclick="showSuggestionTab('engage')">🔥 Posts to Engage</button>
-                        </div>
-                        <div id="suggestions-content" style="max-height: 500px; overflow-y: auto;"></div>
-                        <button class="btn btn-primary" onclick="saveOnboardingChoices()" style="width: 100%; margin-top: 1.5rem;" id="choices-btn">
-                            Complete Onboarding
-                        </button>
-                    </div>
-                    <div id="step4-error" style="margin-top: 1rem;"></div>
-                `;
-                loadOnboardingSuggestions();
+                // Step 4: Interactive onboarding happens in dashboard, not modal
+                // Close modal and redirect to dashboard
+                hideOnboardingModal();
+                // Reload page to trigger dashboard check
+                window.location.reload();
             } else if (step === 5 || step === '5' || step === 'complete') {
                 // Step 5: Complete
                 content.innerHTML = `
@@ -1050,7 +1044,10 @@
                 
                 if (data.success) {
                     onboardingData.keyword_relevance = keyword_relevance;
-                    showOnboardingStep(4);
+                    // Close modal and redirect to dashboard where interactive onboarding will appear
+                    hideOnboardingModal();
+                    // Reload page to trigger dashboard check for interactive onboarding
+                    window.location.reload();
                 } else {
                     document.getElementById('step3-error').innerHTML = 
                         `<div class="alert alert-error">${data.error || 'Failed to save preferences'}</div>`;
@@ -1065,194 +1062,6 @@
             }
         }
         
-        async function loadOnboardingSuggestions() {
-            try {
-                const response = await fetch('/api/onboarding/suggestions', {
-                    headers: getAuthHeaders()
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    onboardingSuggestions = data;
-                    document.getElementById('step4-loading').classList.add('hidden');
-                    document.getElementById('step4-content').classList.remove('hidden');
-                    showSuggestionTab('accounts');
-                } else {
-                    document.getElementById('step4-error').innerHTML = 
-                        `<div class="alert alert-error">${data.error || 'Failed to load suggestions'}</div>`;
-                }
-            } catch (error) {
-                document.getElementById('step4-error').innerHTML = 
-                    `<div class="alert alert-error">Error: ${error.message}</div>`;
-            }
-        }
-        
-        function showSuggestionTab(tab) {
-            // Update tabs
-            document.querySelectorAll('.suggestion-tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            const content = document.getElementById('suggestions-content');
-            
-            if (tab === 'accounts') {
-                const accounts = onboardingSuggestions.accounts || [];
-                content.innerHTML = accounts.map(acc => `
-                    <div class="suggestion-item" onclick="toggleSelection('account', '${acc.id}')" 
-                         data-selected="${selectedAccounts.has(acc.id)}">
-                        <div style="display: flex; align-items: center; gap: 1rem;">
-                            <input type="checkbox" ${selectedAccounts.has(acc.id) ? 'checked' : ''} 
-                                   onchange="toggleSelection('account', '${acc.id}')">
-                            <div style="flex: 1;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <strong>@${acc.username}</strong>
-                                    ${acc.verified ? '<span style="color: var(--primary);">✓</span>' : ''}
-                                </div>
-                                <p style="color: var(--text-secondary); font-size: 14px; margin: 0.25rem 0;">
-                                    ${acc.description || 'No description'}
-                                </p>
-                                <div style="display: flex; gap: 1rem; font-size: 12px; color: var(--text-muted);">
-                                    <span>👥 ${acc.followers?.toLocaleString() || 0} followers</span>
-                                    <span>📊 ${(acc.relevance_score * 100).toFixed(0)}% relevant</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('') || '<p style="color: var(--text-muted);">No accounts found</p>';
-            } else if (tab === 'likes') {
-                const posts = onboardingSuggestions.posts_to_like || [];
-                content.innerHTML = posts.map(post => `
-                    <div class="suggestion-item" onclick="toggleSelection('like', '${post.id}')" 
-                         data-selected="${selectedLikes.has(post.id)}">
-                        <div style="display: flex; align-items: start; gap: 1rem;">
-                            <input type="checkbox" ${selectedLikes.has(post.id) ? 'checked' : ''} 
-                                   onchange="toggleSelection('like', '${post.id}')">
-                            <div style="flex: 1;">
-                                <p style="margin: 0 0 0.5rem 0;">${post.text}</p>
-                                <div style="display: flex; gap: 1rem; font-size: 12px; color: var(--text-muted);">
-                                    <span>@${post.author_username || 'unknown'}</span>
-                                    <span>❤️ ${post.likes || 0}</span>
-                                    <span>💬 ${post.replies || 0}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('') || '<p style="color: var(--text-muted);">No posts found</p>';
-            } else if (tab === 'replies') {
-                const posts = onboardingSuggestions.posts_to_reply || [];
-                content.innerHTML = posts.map(post => `
-                    <div class="suggestion-item" onclick="toggleSelection('reply', '${post.id}')" 
-                         data-selected="${selectedReplies.has(post.id)}">
-                        <div style="display: flex; align-items: start; gap: 1rem;">
-                            <input type="checkbox" ${selectedReplies.has(post.id) ? 'checked' : ''} 
-                                   onchange="toggleSelection('reply', '${post.id}')">
-                            <div style="flex: 1;">
-                                <p style="margin: 0 0 0.5rem 0;">${post.text}</p>
-                                <div style="display: flex; gap: 1rem; font-size: 12px; color: var(--text-muted);">
-                                    <span>@${post.author_username || 'unknown'}</span>
-                                    <span>❤️ ${post.likes || 0}</span>
-                                    <span>💬 ${post.replies || 0}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('') || '<p style="color: var(--text-muted);">No posts found</p>';
-            } else if (tab === 'engage') {
-                const posts = onboardingSuggestions.posts_to_engage || [];
-                content.innerHTML = posts.map(post => `
-                    <div class="suggestion-item" onclick="toggleSelection('engage', '${post.id}')" 
-                         data-selected="${selectedEngage.has(post.id)}">
-                        <div style="display: flex; align-items: start; gap: 1rem;">
-                            <input type="checkbox" ${selectedEngage.has(post.id) ? 'checked' : ''} 
-                                   onchange="toggleSelection('engage', '${post.id}')">
-                            <div style="flex: 1;">
-                                <p style="margin: 0 0 0.5rem 0;">${post.text}</p>
-                                <div style="display: flex; gap: 1rem; font-size: 12px; color: var(--text-muted);">
-                                    <span>@${post.author_username || 'unknown'}</span>
-                                    <span>❤️ ${post.likes || 0}</span>
-                                    <span>💬 ${post.replies || 0}</span>
-                                    <span>🔥 ${post.retweets || 0}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('') || '<p style="color: var(--text-muted);">No posts found</p>';
-            }
-        }
-        
-        function toggleSelection(type, id) {
-            if (type === 'account') {
-                if (selectedAccounts.has(id)) {
-                    selectedAccounts.delete(id);
-                } else {
-                    selectedAccounts.add(id);
-                }
-            } else if (type === 'like') {
-                if (selectedLikes.has(id)) {
-                    selectedLikes.delete(id);
-                } else {
-                    selectedLikes.add(id);
-                }
-            } else if (type === 'reply') {
-                if (selectedReplies.has(id)) {
-                    selectedReplies.delete(id);
-                } else {
-                    selectedReplies.add(id);
-                }
-            } else if (type === 'engage') {
-                if (selectedEngage.has(id)) {
-                    selectedEngage.delete(id);
-                } else {
-                    selectedEngage.add(id);
-                }
-            }
-            
-            // Update visual state
-            const item = event.target.closest('.suggestion-item');
-            if (item) {
-                item.setAttribute('data-selected', 
-                    (type === 'account' && selectedAccounts.has(id)) ||
-                    (type === 'like' && selectedLikes.has(id)) ||
-                    (type === 'reply' && selectedReplies.has(id)) ||
-                    (type === 'engage' && selectedEngage.has(id))
-                );
-            }
-        }
-        
-        async function saveOnboardingChoices() {
-            const btn = document.getElementById('choices-btn');
-            btn.disabled = true;
-            btn.textContent = 'Completing...';
-            
-            try {
-                const response = await fetch('/api/onboarding/choices', {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({
-                        followed_accounts: Array.from(selectedAccounts),
-                        liked_posts: Array.from(selectedLikes),
-                        replied_posts: Array.from(selectedReplies),
-                        engaged_posts: Array.from(selectedEngage)
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showOnboardingStep('complete');
-                } else {
-                    document.getElementById('step4-error').innerHTML = 
-                        `<div class="alert alert-error">${data.error || 'Failed to complete onboarding'}</div>`;
-                    btn.disabled = false;
-                    btn.textContent = 'Complete Onboarding';
-                }
-            } catch (error) {
-                document.getElementById('step4-error').innerHTML = 
-                    `<div class="alert alert-error">Error: ${error.message}</div>`;
-                btn.disabled = false;
-                btn.textContent = 'Complete Onboarding';
-            }
-        }
         
         async function connectXAccount() {
             const username = document.getElementById('x-username-input').value.trim().replace('@', '');
@@ -1814,7 +1623,8 @@
                     if (phaseElement && profileContentElement && feedElement) {
                         phaseElement.classList.remove('hidden');
                         
-                        // Display profile
+                        // Display profile (handle placeholder accounts from API errors)
+                        const isPlaceholder = data.placeholder || false;
                         profileContentElement.innerHTML = `
                             <div class="profile-header">
                                 <div style="width: 64px; height: 64px; border-radius: 50%; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: 24px;">
@@ -1826,11 +1636,15 @@
                                         ${data.account.verified ? '<span style="color: var(--primary);">✓</span>' : ''}
                                     </h3>
                                     <p>@${data.account.username}</p>
-                                    <p style="margin-top: 0.5rem;">${data.account.description || 'No description'}</p>
+                                    <p style="margin-top: 0.5rem; ${isPlaceholder ? 'color: var(--text-muted); font-style: italic;' : ''}">
+                                        ${data.account.description || 'No description'}
+                                    </p>
+                                    ${!isPlaceholder ? `
                                     <div class="profile-stats">
                                         <span>👥 ${(data.account.followers || 0).toLocaleString()} followers</span>
                                         <span>📊 ${(data.account.tweets || 0).toLocaleString()} tweets</span>
                                     </div>
+                                    ` : ''}
                                 </div>
                             </div>
                         `;
@@ -1858,7 +1672,8 @@
         }
         
         async function handleOnboardingResponse(responseValue) {
-            if (!currentOnboardingPost && !currentOnboardingProfile) {
+            // Allow proceeding even if post/profile is placeholder (API error case)
+            if (!currentOnboardingPost && !currentOnboardingProfile && currentOnboardingPhase !== 4) {
                 return;
             }
             
