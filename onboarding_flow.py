@@ -305,11 +305,14 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 posts = json.load(f)
-        except:
+            print(f"Loaded {len(posts)} cached posts for phase {phase} from {cache_file}")
+        except Exception as e:
+            print(f"Error loading cached posts from {cache_file}: {e}")
             pass
     
     # If no cached posts, fetch them
     if not posts:
+        print(f"No cached posts found for phase {phase}, fetching new posts...")
         if phase == 1:
             posts = get_posts_for_onboarding(keywords, keyword_relevance, 'like', 20)
         elif phase == 2:
@@ -317,16 +320,30 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
         elif phase == 3:
             posts = get_posts_for_onboarding(keywords, keyword_relevance, 'engage', 20)
         
+        print(f"Fetched {len(posts)} posts for phase {phase}")
+        
         # Cache posts
         if posts:
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                json.dump(posts, f, indent=2, ensure_ascii=False)
+            try:
+                with open(cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(posts, f, indent=2, ensure_ascii=False)
+                print(f"Cached {len(posts)} posts to {cache_file}")
+            except Exception as e:
+                print(f"Error caching posts to {cache_file}: {e}")
+    
+    # Filter out posts without URLs (they can't be embedded)
+    posts_with_urls = [p for p in posts if p.get('url')]
+    if len(posts_with_urls) < len(posts):
+        print(f"Filtered out {len(posts) - len(posts_with_urls)} posts without URLs (phase {phase})")
+    posts = posts_with_urls
     
     current_index = interactive.get(f"phase{phase}_index", 0)
+    print(f"Current index for phase {phase}: {current_index}, Total posts: {len(posts)}")
     
     if not posts or current_index >= len(posts):
         # If no posts available (API error), return a placeholder post
         if not posts:
+            print(f"No posts available for phase {phase}, returning placeholder")
             return {
                 "success": True,
                 "post": {
@@ -342,6 +359,7 @@ def get_next_onboarding_post(user_id: str, phase: int) -> Dict[str, Any]:
                 "total": 1,
                 "placeholder": True
             }
+        print(f"Index {current_index} >= total posts {len(posts)} for phase {phase}")
         return {"success": False, "error": "No more posts in this phase"}
     
     # Get the post and ensure it has a URL
