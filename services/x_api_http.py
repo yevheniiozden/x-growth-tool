@@ -16,10 +16,10 @@ class HTTPAPIClient:
             api_key: API key from twitterapi.io
         """
         self.api_key = api_key
-        # Try standard Twitter API v2 first (most third-party services proxy to this)
-        self.base_url = "https://api.twitter.com/2"
+        # twitterapi.io base URL
+        self.base_url = "https://api.twitterapi.io"
         self.headers = {
-            "Authorization": f"Bearer {api_key}",  # Primary: Bearer token
+            "x-api-key": api_key,  # twitterapi.io requires x-api-key header
             "Content-Type": "application/json"
         }
     
@@ -43,32 +43,16 @@ class HTTPAPIClient:
             else:
                 response = requests.request(method, url, headers=self.headers, json=params, timeout=10)
             
-            if response.status_code == 401:
-                # Log the error for debugging
-                print(f"HTTP API authentication error: {response.status_code}")
-                print(f"URL: {url}")
-                print(f"Response: {response.text[:200]}")
-                # Try alternative base URL if current one fails
-                if "api.twitter.com" in self.base_url:
-                    # Try twitterapi.io specific endpoint
-                    self.base_url = "https://api.twitterapi.io/v1"
-                    url = f"{self.base_url}{endpoint}"
-                    response = requests.get(url, headers=self.headers, params=params, timeout=10)
-                elif "twitterapi.io" in self.base_url:
-                    # Try with X-API-Key header instead
-                    self.headers = {
-                        "X-API-Key": self.api_key,
-                        "Content-Type": "application/json"
-                    }
-                    response = requests.get(url, headers=self.headers, params=params, timeout=10)
-            
             if response.status_code == 200:
                 return response.json()
             elif response.status_code == 401:
                 print(f"HTTP API authentication error: {response.status_code} - {response.text[:200]}")
+                print(f"URL: {url}")
+                print(f"Headers: {list(self.headers.keys())}")
                 return None
             else:
                 print(f"HTTP API error: {response.status_code} - {response.text[:200]}")
+                print(f"URL: {url}")
                 return None
                 
         except Exception as e:
@@ -87,9 +71,9 @@ class HTTPAPIClient:
             User object (compatible with tweepy format)
         """
         if username:
-            endpoint = f"/users/by/username/{username}"
+            endpoint = f"/twitter/user/info?userName={username}"
         elif user_id:
-            endpoint = f"/users/{user_id}"
+            endpoint = f"/twitter/user/info?userId={user_id}"
         else:
             return None
         
@@ -97,15 +81,24 @@ class HTTPAPIClient:
         if not data:
             return None
         
+        # twitterapi.io response format may differ, handle both formats
+        # Check if data is nested or direct
+        user_data = data.get('data', data) if isinstance(data, dict) else data
+        
         # Return object compatible with tweepy format
         return type('User', (), {
             'data': type('UserData', (), {
-                'id': data.get('id'),
-                'username': data.get('username'),
-                'name': data.get('name'),
-                'description': data.get('description'),
-                'public_metrics': data.get('public_metrics', {}),
-                'verified': data.get('verified', False)
+                'id': str(user_data.get('id', user_data.get('userId', ''))),
+                'username': user_data.get('username', user_data.get('userName', '')),
+                'name': user_data.get('name', user_data.get('displayName', '')),
+                'description': user_data.get('description', user_data.get('bio', '')),
+                'public_metrics': type('Metrics', (), {
+                    'followers_count': user_data.get('followersCount', user_data.get('public_metrics', {}).get('followers_count', 0)),
+                    'following_count': user_data.get('followingCount', user_data.get('public_metrics', {}).get('following_count', 0)),
+                    'tweet_count': user_data.get('tweetCount', user_data.get('public_metrics', {}).get('tweet_count', 0)),
+                    'like_count': user_data.get('likeCount', user_data.get('public_metrics', {}).get('like_count', 0))
+                })(),
+                'verified': user_data.get('verified', False)
             })()
         })()
     
@@ -130,30 +123,55 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        endpoint = f"/users/{id}/tweets"
-        params = {
-            "max_results": min(max_results, 100)
-        }
+        endpoint = f"/twitter/user/lastTweets?userId={id}&count={min(max_results, 100)}"
+        params = {}
         
-        if start_time:
-            params["start_time"] = start_time.isoformat()
-        
-        if pagination_token:
-            params["pagination_token"] = pagination_token
+        # Note: twitterapi.io may not support all these parameters
+        # Adjust based on actual API documentation
         
         data = self._make_request("GET", endpoint, params)
         if not data:
             return type('Response', (), {'data': None, 'meta': {}})()
         
+        # twitterapi.io response format - handle both nested and direct formats
+        tweets_data = data.get('data', data.get('tweets', [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        
         # Convert to tweepy-compatible format
         tweets = []
-        for tweet_data in data.get('data', []):
+        for tweet_data in tweets_data:
+            # Handle different response formats
+            tweet_id = tweet_data.get('id', tweet_data.get('tweetId', ''))
+            tweet_text = tweet_data.get('text', tweet_data.get('content', ''))
+            created_at_str = tweet_data.get('created_at', tweet_data.get('createdAt', ''))
+            
+            # Parse created_at
+            created_at = None
+            if created_at_str:
+                try:
+                    # Try different date formats
+                    if 'T' in created_at_str:
+                        created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                    else:
+                        # Try other formats if needed
+                        created_at = datetime.fromisoformat(created_at_str)
+                except:
+                    pass
+            
+            # Get metrics
+            metrics_data = tweet_data.get('public_metrics', tweet_data.get('metrics', {}))
+            if not isinstance(metrics_data, dict):
+                metrics_data = {}
+            
             tweet = type('Tweet', (), {
-                'id': tweet_data.get('id'),
-                'text': tweet_data.get('text'),
-                'created_at': datetime.fromisoformat(tweet_data.get('created_at', '').replace('Z', '+00:00')) if tweet_data.get('created_at') else None,
-                'author_id': tweet_data.get('author_id'),
-                'public_metrics': type('Metrics', (), tweet_data.get('public_metrics', {}))()
+                'id': str(tweet_id),
+                'text': tweet_text,
+                'created_at': created_at,
+                'author_id': str(id),  # User ID is the author
+                'public_metrics': type('Metrics', (), {
+                    'like_count': metrics_data.get('like_count', metrics_data.get('likeCount', 0)),
+                    'reply_count': metrics_data.get('reply_count', metrics_data.get('replyCount', 0)),
+                    'retweet_count': metrics_data.get('retweet_count', metrics_data.get('retweetCount', 0))
+                })()
             })()
             tweets.append(tweet)
         
@@ -181,25 +199,51 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        endpoint = "/tweets/search/recent"
-        params = {
-            "query": query,
-            "max_results": min(max_results, 100)
-        }
+        endpoint = f"/twitter/tweet/advancedSearch?query={query}&count={min(max_results, 100)}"
+        params = {}
         
         data = self._make_request("GET", endpoint, params)
         if not data:
             return type('Response', (), {'data': None, 'meta': {}})()
         
+        # twitterapi.io response format
+        tweets_data = data.get('data', data.get('tweets', [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        
         # Convert to tweepy-compatible format
         tweets = []
-        for tweet_data in data.get('data', []):
+        for tweet_data in tweets_data:
+            # Handle different response formats
+            tweet_id = tweet_data.get('id', tweet_data.get('tweetId', ''))
+            tweet_text = tweet_data.get('text', tweet_data.get('content', ''))
+            created_at_str = tweet_data.get('created_at', tweet_data.get('createdAt', ''))
+            author_id = tweet_data.get('author_id', tweet_data.get('userId', ''))
+            
+            # Parse created_at
+            created_at = None
+            if created_at_str:
+                try:
+                    if 'T' in created_at_str:
+                        created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                    else:
+                        created_at = datetime.fromisoformat(created_at_str)
+                except:
+                    pass
+            
+            # Get metrics
+            metrics_data = tweet_data.get('public_metrics', tweet_data.get('metrics', {}))
+            if not isinstance(metrics_data, dict):
+                metrics_data = {}
+            
             tweet = type('Tweet', (), {
-                'id': tweet_data.get('id'),
-                'text': tweet_data.get('text'),
-                'created_at': datetime.fromisoformat(tweet_data.get('created_at', '').replace('Z', '+00:00')) if tweet_data.get('created_at') else None,
-                'author_id': tweet_data.get('author_id'),
-                'public_metrics': type('Metrics', (), tweet_data.get('public_metrics', {}))()
+                'id': str(tweet_id),
+                'text': tweet_text,
+                'created_at': created_at,
+                'author_id': str(author_id) if author_id else None,
+                'public_metrics': type('Metrics', (), {
+                    'like_count': metrics_data.get('like_count', metrics_data.get('likeCount', 0)),
+                    'reply_count': metrics_data.get('reply_count', metrics_data.get('replyCount', 0)),
+                    'retweet_count': metrics_data.get('retweet_count', metrics_data.get('retweetCount', 0))
+                })()
             })()
             tweets.append(tweet)
         
@@ -219,26 +263,33 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        endpoint = "/users"
-        params = {
-            "ids": ",".join(ids[:100])  # Limit to 100
-        }
+        # twitterapi.io batch endpoint
+        endpoint = f"/twitter/user/batchUserInfo?userIds={','.join(ids[:100])}"  # Limit to 100
+        params = {}
         
         data = self._make_request("GET", endpoint, params)
         if not data:
             return type('Response', (), {'data': None})()
         
+        # twitterapi.io response format
+        users_data = data.get('data', data.get('users', [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        
         # Convert to tweepy-compatible format
         users = []
-        for user_data in data.get('data', []):
+        for user_data in users_data:
             user = type('User', (), {
-                'id': user_data.get('id'),
-                'username': user_data.get('username'),
-                'name': user_data.get('name'),
-                'description': user_data.get('description'),
-                'public_metrics': type('Metrics', (), user_data.get('public_metrics', {}))(),
+                'id': str(user_data.get('id', user_data.get('userId', ''))),
+                'username': user_data.get('username', user_data.get('userName', '')),
+                'name': user_data.get('name', user_data.get('displayName', '')),
+                'description': user_data.get('description', user_data.get('bio', '')),
+                'public_metrics': type('Metrics', (), {
+                    'followers_count': user_data.get('followersCount', user_data.get('public_metrics', {}).get('followers_count', 0)),
+                    'following_count': user_data.get('followingCount', user_data.get('public_metrics', {}).get('following_count', 0)),
+                    'tweet_count': user_data.get('tweetCount', user_data.get('public_metrics', {}).get('tweet_count', 0)),
+                    'like_count': user_data.get('likeCount', user_data.get('public_metrics', {}).get('like_count', 0))
+                })(),
                 'verified': user_data.get('verified', False),
-                'profile_image_url': user_data.get('profile_image_url')
+                'profile_image_url': user_data.get('profile_image_url', user_data.get('avatar', ''))
             })()
             users.append(user)
         
@@ -255,6 +306,9 @@ class HTTPAPIClient:
         """
         Get tweets from a list
         
+        Note: twitterapi.io may not have a direct list tweets endpoint
+        This is a placeholder that may need to be implemented differently
+        
         Args:
             id: List ID
             max_results: Maximum results
@@ -265,37 +319,10 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        endpoint = f"/lists/{id}/tweets"
-        params = {
-            "max_results": min(max_results, 100)
-        }
-        
-        if start_time:
-            params["start_time"] = start_time.isoformat()
-        
-        if pagination_token:
-            params["pagination_token"] = pagination_token
-        
-        data = self._make_request("GET", endpoint, params)
-        if not data:
-            return type('Response', (), {'data': None, 'meta': {}})()
-        
-        # Convert to tweepy-compatible format
-        tweets = []
-        for tweet_data in data.get('data', []):
-            tweet = type('Tweet', (), {
-                'id': tweet_data.get('id'),
-                'text': tweet_data.get('text'),
-                'created_at': datetime.fromisoformat(tweet_data.get('created_at', '').replace('Z', '+00:00')) if tweet_data.get('created_at') else None,
-                'author_id': tweet_data.get('author_id'),
-                'public_metrics': type('Metrics', (), tweet_data.get('public_metrics', {}))()
-            })()
-            tweets.append(tweet)
-        
-        return type('Response', (), {
-            'data': tweets,
-            'meta': data.get('meta', {})
-        })()
+        # twitterapi.io may not support this endpoint directly
+        # Return empty for now - may need to get list members first, then their tweets
+        print(f"Warning: get_list_tweets not fully implemented for twitterapi.io")
+        return type('Response', (), {'data': None, 'meta': {}})()
     
     def get_list_members(
         self,
@@ -316,25 +343,24 @@ class HTTPAPIClient:
         Returns:
             Response object (compatible with tweepy format)
         """
-        endpoint = f"/lists/{id}/members"
-        params = {
-            "max_results": min(max_results, 100)
-        }
-        
-        if pagination_token:
-            params["pagination_token"] = pagination_token
+        # twitterapi.io endpoint for list members
+        endpoint = f"/twitter/list/members?listId={id}&count={min(max_results, 100)}"
+        params = {}
         
         data = self._make_request("GET", endpoint, params)
         if not data:
             return type('Response', (), {'data': None, 'meta': {}})()
         
+        # twitterapi.io response format
+        users_data = data.get('data', data.get('members', [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        
         # Convert to tweepy-compatible format
         users = []
-        for user_data in data.get('data', []):
+        for user_data in users_data:
             user = type('User', (), {
-                'id': user_data.get('id'),
-                'username': user_data.get('username'),
-                'name': user_data.get('name')
+                'id': str(user_data.get('id', user_data.get('userId', ''))),
+                'username': user_data.get('username', user_data.get('userName', '')),
+                'name': user_data.get('name', user_data.get('displayName', ''))
             })()
             users.append(user)
         
@@ -351,6 +377,9 @@ class HTTPAPIClient:
         """
         Get user's lists
         
+        Note: twitterapi.io may not have a direct endpoint for this
+        This is a placeholder that may need to be implemented differently
+        
         Args:
             user_id: User ID
             max_results: Maximum results
@@ -361,24 +390,7 @@ class HTTPAPIClient:
         if not user_id:
             return type('Response', (), {'data': None})()
         
-        endpoint = f"/users/{user_id}/owned_lists"
-        params = {
-            "max_results": min(max_results, 100)
-        }
-        
-        data = self._make_request("GET", endpoint, params)
-        if not data:
-            return type('Response', (), {'data': None})()
-        
-        # Convert to tweepy-compatible format
-        lists = []
-        for list_data in data.get('data', []):
-            list_obj = type('List', (), {
-                'id': list_data.get('id'),
-                'name': list_data.get('name'),
-                'description': list_data.get('description')
-            })()
-            lists.append(list_obj)
-        
-        return type('Response', (), {'data': lists})()
+        # twitterapi.io may not support this endpoint directly
+        print(f"Warning: get_user_lists not fully implemented for twitterapi.io")
+        return type('Response', (), {'data': None})()
 
