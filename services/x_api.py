@@ -6,18 +6,23 @@ import config
 
 # Initialize Twitter API client
 client = None
-# Try Bearer Token first (preferred for read-only operations)
-bearer_token = config.X_BEARER_TOKEN or config.X_API_KEY
-if bearer_token:
+use_http_client = False
+api_key = config.X_BEARER_TOKEN or config.X_API_KEY
+
+# Try tweepy first (for official Twitter API)
+if api_key:
     try:
         # Use Bearer Token if available, otherwise try API Key as Bearer Token
-        # This works for third-party services like twitterapi.io
         client = tweepy.Client(
-            bearer_token=bearer_token,
+            bearer_token=api_key,
             wait_on_rate_limit=True
         )
+        # Don't test immediately - let it fail on first real call
+        # This avoids unnecessary API calls and handles errors gracefully
     except Exception as e:
         print(f"Warning: Could not initialize Twitter client with Bearer Token: {e}")
+        print("Will use HTTP client for twitterapi.io")
+        use_http_client = True
         # Fallback: try with API Key + Secret if available
         if config.X_API_KEY and config.X_API_SECRET:
             try:
@@ -26,8 +31,20 @@ if bearer_token:
                     consumer_secret=config.X_API_SECRET,
                     wait_on_rate_limit=True
                 )
+                use_http_client = False
             except Exception as e2:
                 print(f"Warning: Could not initialize Twitter client: {e2}")
+                use_http_client = True
+
+# If tweepy doesn't work, use HTTP client for twitterapi.io
+if use_http_client and api_key:
+    try:
+        from services.x_api_http import HTTPAPIClient
+        client = HTTPAPIClient(api_key)
+        print("Using HTTP client for twitterapi.io")
+    except ImportError:
+        print("Warning: HTTP client not available, API calls will fail")
+        client = None
 
 
 def get_user_timeline(
@@ -55,8 +72,11 @@ def get_user_timeline(
         # Get user ID if username provided
         if username and not user_id:
             user = client.get_user(username=username)
-            if user.data:
+            # Handle both tweepy and HTTP client responses
+            if hasattr(user, 'data') and user.data:
                 user_id = user.data.id
+            elif hasattr(user, 'id'):
+                user_id = user.id
         
         if not user_id:
             return []
@@ -76,31 +96,82 @@ def get_user_timeline(
                 pagination_token=pagination_token
             )
             
-            if not response.data:
+            # Handle both tweepy and HTTP client responses
+            response_data = None
+            if hasattr(response, 'data'):
+                response_data = response.data
+            elif isinstance(response, list):
+                response_data = response
+            
+            if not response_data:
                 break
             
-            for tweet in response.data:
+            for tweet in response_data:
+                # Handle both tweepy and HTTP client tweet objects
+                tweet_id = tweet.id if hasattr(tweet, 'id') else tweet.get('id')
+                tweet_text = tweet.text if hasattr(tweet, 'text') else tweet.get('text')
+                tweet_created = tweet.created_at if hasattr(tweet, 'created_at') else tweet.get('created_at')
+                
+                # Get metrics
+                if hasattr(tweet, 'public_metrics'):
+                    metrics = tweet.public_metrics
+                    if hasattr(metrics, 'get'):
+                        likes = metrics.get("like_count", 0)
+                        replies = metrics.get("reply_count", 0)
+                        retweets = metrics.get("retweet_count", 0)
+                    else:
+                        likes = getattr(metrics, 'like_count', 0)
+                        replies = getattr(metrics, 'reply_count', 0)
+                        retweets = getattr(metrics, 'retweet_count', 0)
+                else:
+                    metrics = tweet.get('public_metrics', {}) if isinstance(tweet, dict) else {}
+                    likes = metrics.get("like_count", 0) if isinstance(metrics, dict) else 0
+                    replies = metrics.get("reply_count", 0) if isinstance(metrics, dict) else 0
+                    retweets = metrics.get("retweet_count", 0) if isinstance(metrics, dict) else 0
+                
                 tweets.append({
-                    "id": tweet.id,
-                    "text": tweet.text,
-                    "created_at": tweet.created_at.isoformat() if tweet.created_at else None,
+                    "id": tweet_id,
+                    "text": tweet_text,
+                    "created_at": tweet_created.isoformat() if hasattr(tweet_created, 'isoformat') else (str(tweet_created) if tweet_created else None),
                     "author": username or user_id,
                     "metrics": {
-                        "likes": tweet.public_metrics.get("like_count", 0) if hasattr(tweet, 'public_metrics') else 0,
-                        "replies": tweet.public_metrics.get("reply_count", 0) if hasattr(tweet, 'public_metrics') else 0,
-                        "retweets": tweet.public_metrics.get("retweet_count", 0) if hasattr(tweet, 'public_metrics') else 0,
+                        "likes": likes,
+                        "replies": replies,
+                        "retweets": retweets,
                     }
                 })
             
             # Check for more pages
-            if not hasattr(response, 'meta') or not response.meta.get('next_token'):
+            meta = None
+            if hasattr(response, 'meta'):
+                meta = response.meta
+            elif isinstance(response, dict):
+                meta = response.get('meta', {})
+            
+            if not meta or not meta.get('next_token'):
                 break
-            pagination_token = response.meta['next_token']
+            pagination_token = meta.get('next_token')
         
         return tweets
     
     except Exception as e:
-        print(f"Error fetching user timeline: {e}")
+        error_msg = str(e)
+        # If we get 401 and using tweepy, try switching to HTTP client
+        if ("401" in error_msg or "Unauthorized" in error_msg) and not use_http_client:
+            print(f"Tweepy authentication failed: {e}")
+            print("Switching to HTTP client for twitterapi.io")
+            try:
+                from services.x_api_http import HTTPAPIClient
+                global client, use_http_client
+                client = HTTPAPIClient(api_key)
+                use_http_client = True
+                print("Using HTTP client for twitterapi.io")
+                # Retry the call with HTTP client
+                return get_user_timeline(username, user_id, days_back, max_results)
+            except Exception as http_error:
+                print(f"HTTP client also failed: {http_error}")
+        else:
+            print(f"Error fetching user timeline: {e}")
         return []
 
 
@@ -128,8 +199,11 @@ def get_user_likes(
     try:
         if username and not user_id:
             user = client.get_user(username=username)
-            if user.data:
+            # Handle both tweepy and HTTP client responses
+            if hasattr(user, 'data') and user.data:
                 user_id = user.data.id
+            elif hasattr(user, 'id'):
+                user_id = user.id
         
         if not user_id:
             return []
@@ -140,43 +214,99 @@ def get_user_likes(
         pagination_token = None
         
         while len(tweets) < max_results:
-            response = client.get_liked_tweets(
-                id=user_id,
-                max_results=min(100, max_results - len(tweets)),
-                start_time=start_time,
-                tweet_fields=['created_at', 'public_metrics', 'text', 'author_id'],
-                pagination_token=pagination_token
-            )
+            # Check if client has get_liked_tweets method (tweepy) or need alternative
+            if hasattr(client, 'get_liked_tweets'):
+                response = client.get_liked_tweets(
+                    id=user_id,
+                    max_results=min(100, max_results - len(tweets)),
+                    start_time=start_time,
+                    tweet_fields=['created_at', 'public_metrics', 'text', 'author_id'],
+                    pagination_token=pagination_token
+                )
+            else:
+                # HTTP client might not have this, skip for now
+                break
             
-            if not response.data:
+            # Handle both tweepy and HTTP client responses
+            response_data = None
+            if hasattr(response, 'data'):
+                response_data = response.data
+            elif isinstance(response, list):
+                response_data = response
+            
+            if not response_data:
                 break
             
             # Get author usernames
-            author_ids = [tweet.author_id for tweet in response.data if hasattr(tweet, 'author_id')]
+            author_ids = []
+            for tweet in response_data:
+                author_id = tweet.author_id if hasattr(tweet, 'author_id') else (tweet.get('author_id') if isinstance(tweet, dict) else None)
+                if author_id:
+                    author_ids.append(author_id)
+            
             authors = {}
             if author_ids:
                 users = client.get_users(ids=author_ids)
-                if users.data:
-                    for user in users.data:
-                        authors[user.id] = user.username
+                # Handle both tweepy and HTTP client responses
+                users_data = None
+                if hasattr(users, 'data'):
+                    users_data = users.data
+                elif isinstance(users, list):
+                    users_data = users
+                
+                if users_data:
+                    for user in users_data:
+                        user_id_val = user.id if hasattr(user, 'id') else user.get('id')
+                        user_username = user.username if hasattr(user, 'username') else user.get('username')
+                        if user_id_val and user_username:
+                            authors[user_id_val] = user_username
             
-            for tweet in response.data:
-                author_id = tweet.author_id if hasattr(tweet, 'author_id') else None
+            for tweet in response_data:
+                # Handle both tweepy and HTTP client tweet objects
+                tweet_id = tweet.id if hasattr(tweet, 'id') else tweet.get('id')
+                tweet_text = tweet.text if hasattr(tweet, 'text') else tweet.get('text')
+                tweet_created = tweet.created_at if hasattr(tweet, 'created_at') else tweet.get('created_at')
+                author_id = tweet.author_id if hasattr(tweet, 'author_id') else (tweet.get('author_id') if isinstance(tweet, dict) else None)
+                
+                # Get metrics
+                if hasattr(tweet, 'public_metrics'):
+                    metrics = tweet.public_metrics
+                    if hasattr(metrics, 'get'):
+                        likes = metrics.get("like_count", 0)
+                        replies = metrics.get("reply_count", 0)
+                        retweets = metrics.get("retweet_count", 0)
+                    else:
+                        likes = getattr(metrics, 'like_count', 0)
+                        replies = getattr(metrics, 'reply_count', 0)
+                        retweets = getattr(metrics, 'retweet_count', 0)
+                else:
+                    metrics = tweet.get('public_metrics', {}) if isinstance(tweet, dict) else {}
+                    likes = metrics.get("like_count", 0) if isinstance(metrics, dict) else 0
+                    replies = metrics.get("reply_count", 0) if isinstance(metrics, dict) else 0
+                    retweets = metrics.get("retweet_count", 0) if isinstance(metrics, dict) else 0
+                
                 tweets.append({
-                    "id": tweet.id,
-                    "text": tweet.text,
-                    "created_at": tweet.created_at.isoformat() if tweet.created_at else None,
+                    "id": tweet_id,
+                    "text": tweet_text,
+                    "created_at": tweet_created.isoformat() if hasattr(tweet_created, 'isoformat') else (str(tweet_created) if tweet_created else None),
                     "author": authors.get(author_id, author_id) if author_id else "Unknown",
                     "metrics": {
-                        "likes": tweet.public_metrics.get("like_count", 0) if hasattr(tweet, 'public_metrics') else 0,
-                        "replies": tweet.public_metrics.get("reply_count", 0) if hasattr(tweet, 'public_metrics') else 0,
-                        "retweets": tweet.public_metrics.get("retweet_count", 0) if hasattr(tweet, 'public_metrics') else 0,
+                        "likes": likes,
+                        "replies": replies,
+                        "retweets": retweets,
                     }
                 })
             
-            if not hasattr(response, 'meta') or not response.meta.get('next_token'):
+            # Check for more pages
+            meta = None
+            if hasattr(response, 'meta'):
+                meta = response.meta
+            elif isinstance(response, dict):
+                meta = response.get('meta', {})
+            
+            if not meta or not meta.get('next_token'):
                 break
-            pagination_token = response.meta['next_token']
+            pagination_token = meta.get('next_token')
         
         return tweets
     
@@ -245,19 +375,36 @@ def get_list_members(list_id: str) -> List[Dict[str, Any]]:
                 pagination_token=pagination_token
             )
             
-            if not response.data:
+            # Handle both tweepy and HTTP client responses
+            response_data = None
+            if hasattr(response, 'data'):
+                response_data = response.data
+            elif isinstance(response, list):
+                response_data = response
+            
+            if not response_data:
                 break
             
-            for user in response.data:
+            for user in response_data:
+                user_id_val = user.id if hasattr(user, 'id') else user.get('id')
+                user_username = user.username if hasattr(user, 'username') else user.get('username')
+                user_name = user.name if hasattr(user, 'name') else user.get('name')
                 members.append({
-                    "id": user.id,
-                    "username": user.username,
-                    "name": user.name
+                    "id": user_id_val,
+                    "username": user_username,
+                    "name": user_name
                 })
             
-            if not hasattr(response, 'meta') or not response.meta.get('next_token'):
+            # Check for more pages
+            meta = None
+            if hasattr(response, 'meta'):
+                meta = response.meta
+            elif isinstance(response, dict):
+                meta = response.get('meta', {})
+            
+            if not meta or not meta.get('next_token'):
                 break
-            pagination_token = response.meta['next_token']
+            pagination_token = meta.get('next_token')
         
         return members
     
@@ -300,36 +447,87 @@ def get_list_timeline(
                 pagination_token=pagination_token
             )
             
-            if not response.data:
+            # Handle both tweepy and HTTP client responses
+            response_data = None
+            if hasattr(response, 'data'):
+                response_data = response.data
+            elif isinstance(response, list):
+                response_data = response
+            
+            if not response_data:
                 break
             
             # Get author usernames
-            author_ids = [tweet.author_id for tweet in response.data if hasattr(tweet, 'author_id')]
+            author_ids = []
+            for tweet in response_data:
+                author_id = tweet.author_id if hasattr(tweet, 'author_id') else (tweet.get('author_id') if isinstance(tweet, dict) else None)
+                if author_id:
+                    author_ids.append(author_id)
+            
             authors = {}
             if author_ids:
                 users = client.get_users(ids=author_ids)
-                if users.data:
-                    for user in users.data:
-                        authors[user.id] = user.username
+                # Handle both tweepy and HTTP client responses
+                users_data = None
+                if hasattr(users, 'data'):
+                    users_data = users.data
+                elif isinstance(users, list):
+                    users_data = users
+                
+                if users_data:
+                    for user in users_data:
+                        user_id_val = user.id if hasattr(user, 'id') else user.get('id')
+                        user_username = user.username if hasattr(user, 'username') else user.get('username')
+                        if user_id_val and user_username:
+                            authors[user_id_val] = user_username
             
-            for tweet in response.data:
-                author_id = tweet.author_id if hasattr(tweet, 'author_id') else None
+            for tweet in response_data:
+                # Handle both tweepy and HTTP client tweet objects
+                tweet_id = tweet.id if hasattr(tweet, 'id') else tweet.get('id')
+                tweet_text = tweet.text if hasattr(tweet, 'text') else tweet.get('text')
+                tweet_created = tweet.created_at if hasattr(tweet, 'created_at') else tweet.get('created_at')
+                author_id = tweet.author_id if hasattr(tweet, 'author_id') else (tweet.get('author_id') if isinstance(tweet, dict) else None)
+                
+                # Get metrics
+                if hasattr(tweet, 'public_metrics'):
+                    metrics = tweet.public_metrics
+                    if hasattr(metrics, 'get'):
+                        likes = metrics.get("like_count", 0)
+                        replies = metrics.get("reply_count", 0)
+                        retweets = metrics.get("retweet_count", 0)
+                    else:
+                        likes = getattr(metrics, 'like_count', 0)
+                        replies = getattr(metrics, 'reply_count', 0)
+                        retweets = getattr(metrics, 'retweet_count', 0)
+                else:
+                    metrics = tweet.get('public_metrics', {}) if isinstance(tweet, dict) else {}
+                    likes = metrics.get("like_count", 0) if isinstance(metrics, dict) else 0
+                    replies = metrics.get("reply_count", 0) if isinstance(metrics, dict) else 0
+                    retweets = metrics.get("retweet_count", 0) if isinstance(metrics, dict) else 0
+                
                 tweets.append({
-                    "id": tweet.id,
-                    "text": tweet.text,
-                    "created_at": tweet.created_at.isoformat() if tweet.created_at else None,
+                    "id": tweet_id,
+                    "text": tweet_text,
+                    "created_at": tweet_created.isoformat() if hasattr(tweet_created, 'isoformat') else (str(tweet_created) if tweet_created else None),
                     "author": authors.get(author_id, author_id) if author_id else "Unknown",
                     "author_id": author_id,
                     "metrics": {
-                        "likes": tweet.public_metrics.get("like_count", 0) if hasattr(tweet, 'public_metrics') else 0,
-                        "replies": tweet.public_metrics.get("reply_count", 0) if hasattr(tweet, 'public_metrics') else 0,
-                        "retweets": tweet.public_metrics.get("retweet_count", 0) if hasattr(tweet, 'public_metrics') else 0,
+                        "likes": likes,
+                        "replies": replies,
+                        "retweets": retweets,
                     }
                 })
             
-            if not hasattr(response, 'meta') or not response.meta.get('next_token'):
+            # Check for more pages
+            meta = None
+            if hasattr(response, 'meta'):
+                meta = response.meta
+            elif isinstance(response, dict):
+                meta = response.get('meta', {})
+            
+            if not meta or not meta.get('next_token'):
                 break
-            pagination_token = response.meta['next_token']
+            pagination_token = meta.get('next_token')
         
         return tweets
     
@@ -355,8 +553,11 @@ def get_user_lists(username: Optional[str] = None, user_id: Optional[str] = None
     try:
         if username and not user_id:
             user = client.get_user(username=username)
-            if user.data:
+            # Handle both tweepy and HTTP client responses
+            if hasattr(user, 'data') and user.data:
                 user_id = user.data.id
+            elif hasattr(user, 'id'):
+                user_id = user.id
         
         if not user_id:
             return []
@@ -365,26 +566,52 @@ def get_user_lists(username: Optional[str] = None, user_id: Optional[str] = None
         pagination_token = None
         
         while True:
-            response = client.get_owned_lists(
-                id=user_id,
-                max_results=100,
-                list_fields=['name', 'description'],
-                pagination_token=pagination_token
-            )
-            
-            if not response.data:
+            # Check if client has get_owned_lists or get_user_lists method
+            if hasattr(client, 'get_owned_lists'):
+                response = client.get_owned_lists(
+                    id=user_id,
+                    max_results=100,
+                    list_fields=['name', 'description'],
+                    pagination_token=pagination_token
+                )
+            elif hasattr(client, 'get_user_lists'):
+                response = client.get_user_lists(
+                    user_id=user_id,
+                    max_results=100
+                )
+            else:
                 break
             
-            for list_obj in response.data:
+            # Handle both tweepy and HTTP client responses
+            response_data = None
+            if hasattr(response, 'data'):
+                response_data = response.data
+            elif isinstance(response, list):
+                response_data = response
+            
+            if not response_data:
+                break
+            
+            for list_obj in response_data:
+                list_id = list_obj.id if hasattr(list_obj, 'id') else list_obj.get('id')
+                list_name = list_obj.name if hasattr(list_obj, 'name') else list_obj.get('name')
+                list_desc = list_obj.description if hasattr(list_obj, 'description') else list_obj.get('description', '')
                 lists.append({
-                    "id": list_obj.id,
-                    "name": list_obj.name,
-                    "description": list_obj.description if hasattr(list_obj, 'description') else ""
+                    "id": list_id,
+                    "name": list_name,
+                    "description": list_desc
                 })
             
-            if not hasattr(response, 'meta') or not response.meta.get('next_token'):
+            # Check for more pages
+            meta = None
+            if hasattr(response, 'meta'):
+                meta = response.meta
+            elif isinstance(response, dict):
+                meta = response.get('meta', {})
+            
+            if not meta or not meta.get('next_token'):
                 break
-            pagination_token = response.meta['next_token']
+            pagination_token = meta.get('next_token')
         
         return lists
     
