@@ -944,6 +944,24 @@
                 <span class="section-icon">📊</span>
                 What Should I Do Today?
             </h2>
+            
+            <!-- API Key Status Banner -->
+            <div id="api-key-status-banner" class="hidden" style="background: var(--bg-tertiary); border: 2px solid var(--warning); border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem;">
+                <div style="font-size: 24px;">⚠️</div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; color: var(--warning); margin-bottom: 0.25rem;">AI Features Limited</div>
+                    <div style="font-size: 14px; color: var(--text-secondary);">
+                        <span id="api-key-status-message">OpenAI API key is invalid or missing. AI features will use fallback keyword matching.</span>
+                        <div style="margin-top: 0.5rem; font-size: 13px; color: var(--text-muted);">
+                            Update <code style="background: var(--bg-secondary); padding: 0.125rem 0.5rem; border-radius: 4px;">OPENAI_API_KEY</code> in Railway environment variables to enable full AI capabilities.
+                        </div>
+                    </div>
+                </div>
+                <button onclick="checkApiKeyStatus()" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 14px; white-space: nowrap;">
+                    Check Status
+                </button>
+            </div>
+            
             <div id="dashboard-content">
                 <div class="spinner"></div>
             </div>
@@ -1116,6 +1134,9 @@
                     window.location.href = '/auth';
                     return;
                 }
+                
+                // Check API key status on auth check
+                checkApiKeyStatus();
                 
                 currentUser = await userResponse.json();
                 
@@ -1738,9 +1759,41 @@
         }
 
         // Load dashboard - Modern 2025 Design
+        async function checkApiKeyStatus() {
+            try {
+                const response = await fetch('/api/health/keys', { headers: getAuthHeaders() });
+                const data = await response.json();
+                
+                const banner = document.getElementById('api-key-status-banner');
+                const message = document.getElementById('api-key-status-message');
+                
+                if (!data.overall.openai_available) {
+                    // OpenAI key is invalid or missing
+                    banner.classList.remove('hidden');
+                    if (data.openai.error === 'missing') {
+                        message.textContent = 'OpenAI API key is not configured. AI features will use fallback keyword matching.';
+                    } else if (data.openai.error === 'invalid_format') {
+                        message.textContent = 'OpenAI API key format is invalid (should start with "sk-"). AI features will use fallback keyword matching.';
+                    } else if (data.openai.error === 'authentication') {
+                        message.textContent = 'OpenAI API key is invalid or expired. AI features will use fallback keyword matching.';
+                    } else {
+                        message.textContent = data.openai.message || 'OpenAI API key issue detected. AI features will use fallback keyword matching.';
+                    }
+                } else {
+                    // OpenAI key is valid - hide banner
+                    banner.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Error checking API key status:', error);
+            }
+        }
+        
         async function loadDashboard() {
             const content = document.getElementById('dashboard-content');
             content.innerHTML = '<div class="spinner"></div>';
+            
+            // Check API key status
+            checkApiKeyStatus();
             
             // Check for posts ready to post
             checkReadyPosts();
