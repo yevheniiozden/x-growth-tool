@@ -198,15 +198,15 @@ def delete_post(post_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     schedule = load_content_schedule(user_id)
     posts = schedule.get("posts", [])
     
-        for i, post in enumerate(posts):
-            if post.get("id") == post_id:
-                deleted = posts.pop(i)
-                save_content_schedule(schedule, user_id)
-                
-                # Learn from rejection
-                process_explicit_feedback("rejection", post.get("content"), None, user_id)
-                
-                return {"deleted": deleted}
+    for i, post in enumerate(posts):
+        if post.get("id") == post_id:
+            deleted = posts.pop(i)
+            save_content_schedule(schedule, user_id)
+            
+            # Learn from rejection
+            process_explicit_feedback("rejection", post.get("content"), None, user_id)
+            
+            return {"deleted": deleted}
     
     return {"error": "Post not found"}
 
